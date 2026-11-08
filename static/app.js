@@ -24,7 +24,7 @@ document.querySelectorAll(".lang-switch button").forEach((b) => {
   b.setAttribute("aria-pressed", on ? "true" : "false");
   b.onclick = async () => {
     if (on) return;
-    try { localStorage.setItem("km-lang", b.dataset.lang); } catch (e) { /* storage blocked: still switch for now */ }
+    try { localStorage.setItem("km-lang-v2", b.dataset.lang); } catch (e) { /* storage blocked: still switch for now */ }
     try {
       await fetch("/api/lang", { method: "POST", headers: { "Content-Type": "application/json" },
                                  body: JSON.stringify({ lang: b.dataset.lang }) });

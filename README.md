@@ -20,8 +20,8 @@ or manually:
 Then open http://127.0.0.1:8000 in your browser (start.bat opens the page itself if it is not already open).
 
 **Language:** The **DE | EN** switch in the page header toggles between German and English. The browser remembers the
-choice; without a choice, the browser language is used. Server messages follow the chosen language. The server's start
-language can be set with `set KM_LANG=de` or `set KM_LANG=en` (otherwise the Windows UI language is used).
+choice; without a choice, the page starts in English. Server messages follow the chosen language. The server's start
+language can be set with `set KM_LANG=de` or `set KM_LANG=en` (default: English).
 
 **Security:** The server is bound to `127.0.0.1` and can therefore only be reached from this computer, not from the LAN
 or the internet. The port can be changed with `set PORT=8001`.
@@ -144,7 +144,7 @@ other PCs.
 - **No extra browser tab**: start.bat no longer opens a tab unconditionally. After starting, the server waits 3.5 s; if
   an open page has reconnected by then, only that page reloads. If no page is open, it opens exactly one tab
   (controlled by `OPEN_BROWSER=1`, which start.bat sets; with `python server.py` run by hand, nothing is opened).
-- **Bilingual (DE | EN)**: switch in the header, choice saved in the browser, default = browser language; server
+- **Bilingual (DE | EN)**: switch in the header, choice saved in the browser, default = English; server
   messages in the chosen language (`POST /api/lang`), start language via `KM_LANG=de|en`.
 - **Heatmap** of all threads over the last 2 minutes
 - **Load generator**: one process per thread, intensity 5–100 %, selectable duration, optionally pinned to the thread

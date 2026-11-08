@@ -62,7 +62,7 @@ PROBLEMS?
 - A computation method is greyed out: expand "System" at the top of the page – the reason is shown there.
 - No internet: on a PC with internet, build the "Full" package (export_full.bat,
   produces export\CoreMonitor_Full_<date>.zip) and use that instead.
-- Language: switch DE | EN at the top of the page (default = browser language).
+- Language: switch DE | EN at the top of the page (default = English; the choice is remembered).
   Server start language: beforehand  set KM_LANG=en  or  set KM_LANG=de
 - Description and project report are included in both languages: README.md / README.de.md,
   Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).

@@ -20,8 +20,8 @@ oder manuell:
 Danach im Browser: http://127.0.0.1:8000 (start.bat öffnet die Seite selbst, falls sie nicht schon offen ist)
 
 **Sprache:** Oben in der Kopfzeile schaltet **DE | EN** zwischen Deutsch und Englisch um. Die Wahl merkt sich der
-Browser; ohne Wahl gilt die Sprache des Browsers. Meldungen des Servers folgen der gewählten Sprache. Die Startsprache
-des Servers lässt sich mit `set KM_LANG=de` bzw. `set KM_LANG=en` festlegen (sonst gilt die Sprache der Windows-Oberfläche).
+Browser; ohne Wahl startet die Seite auf Englisch. Meldungen des Servers folgen der gewählten Sprache. Die Startsprache
+des Servers lässt sich mit `set KM_LANG=de` bzw. `set KM_LANG=en` festlegen (Voreinstellung: Englisch).
 
 **Sicherheit:** Der Server bindet fest an `127.0.0.1` und ist damit nur auf diesem Rechner
 erreichbar, nicht aus dem LAN oder Internet. Der Port lässt sich mit `set PORT=8001` ändern.
@@ -146,7 +146,7 @@ anderen PCs.
 - **Kein zusätzlicher Browser-Tab**: start.bat öffnet keinen Tab mehr fest. Der Server wartet nach dem Start 3,5 s;
   hat sich bis dahin eine offene Seite neu verbunden, lädt nur sie neu. Ist keine Seite offen, öffnet er genau einen
   Tab (gesteuert über `OPEN_BROWSER=1`, das start.bat setzt; bei `python server.py` von Hand wird nichts geöffnet).
-- **Zweisprachig (DE | EN)**: Umschaltung in der Kopfzeile, Wahl im Browser gespeichert, Voreinstellung = Browsersprache;
+- **Zweisprachig (DE | EN)**: Umschaltung in der Kopfzeile, Wahl im Browser gespeichert, Voreinstellung = Englisch;
   Servermeldungen in der gewählten Sprache (`POST /api/lang`), Startsprache über `KM_LANG=de|en`.
 - **Heatmap** aller Threads über die letzten 2 Minuten
 - **Last-Generator**: ein Prozess pro Thread, Intensität 5–100 %, Dauer wählbar,

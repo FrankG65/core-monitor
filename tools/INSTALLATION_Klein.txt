@@ -62,7 +62,7 @@ PROBLEME?
 - Ein Rechenverfahren ist ausgegraut: oben auf der Seite "System" aufklappen – dort steht der Grund.
 - Ohne Internet: Auf einem PC mit Internet das Paket "Full" (Komplett) bauen (export_full.bat,
   ergibt export\CoreMonitor_Full_<Datum>.zip) und dieses verwenden.
-- Sprache: oben auf der Seite DE | EN umschalten (Voreinstellung = Browsersprache).
+- Sprache: oben auf der Seite DE | EN umschalten (Voreinstellung = Englisch; die Wahl wird gemerkt).
   Startsprache des Servers: vorher  set KM_LANG=de  bzw.  set KM_LANG=en
 - Beschreibung und Projektbericht liegen zweisprachig bei: README.de.md / README.md,
   Projektbericht_Parallelisierung.pdf (Deutsch) / Project_Report_Core_Monitor.pdf (Englisch).

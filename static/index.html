@@ -6,15 +6,16 @@
 <title>Kern-Monitor</title>
 <link rel="stylesheet" href="/static/style.css">
 <script>
-  // Language (de/en): URL parameter ?lang=de|en (for this page load only), then the saved choice, otherwise the
-  // browser language. Set before rendering, so nothing flickers.
+  // Language (de/en): URL parameter ?lang=de|en (for this page load only), then the saved choice, otherwise English.
+  // Set before rendering, so nothing flickers. The storage key is versioned ("-v2"): choices saved while the
+  // default still followed the browser language are ignored once, so every copy starts in English.
   // Bilingual markup: <span data-l="de">…</span><span data-l="en">…</span> – CSS hides the other language.
   // Attributes: data-en-title="…" (title), <option data-en="…"> – switched by app.js at startup.
   // In scripts: L("Deutsch", "English").
   window.LANG = (() => {
     try { const q = new URLSearchParams(location.search).get("lang"); if (q === "de" || q === "en") return q; } catch (e) {}
-    try { const s = localStorage.getItem("km-lang"); if (s === "de" || s === "en") return s; } catch (e) {}
-    return (navigator.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
+    try { const s = localStorage.getItem("km-lang-v2"); if (s === "de" || s === "en") return s; } catch (e) {}
+    return "en";
   })();
   document.documentElement.lang = window.LANG;
   function L(de, en) { return window.LANG === "en" ? en : de; }

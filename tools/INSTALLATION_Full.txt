@@ -36,7 +36,7 @@ NOTES
 - Measurement results are saved in the benchmarks\ folder (CSV for Excel and JSON; the column names/keys are German).
 - The package can be rebuilt on a developer PC with export_full.bat
   (produces export\CoreMonitor_Full_<date>.zip; see README.md).
-- Language: switch DE | EN at the top of the page (default = browser language).
+- Language: switch DE | EN at the top of the page (default = English; the choice is remembered).
   Server start language: beforehand  set KM_LANG=en  or  set KM_LANG=de
 - Description and project report are included in both languages: README.md / README.de.md,
   Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).

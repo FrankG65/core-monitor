@@ -36,7 +36,7 @@ HINWEISE
 - Messergebnisse werden im Ordner benchmarks\ gespeichert (CSV für Excel und JSON).
 - Neu bauen kann man das Paket auf einem Entwickler-PC mit export_full.bat
   (ergibt export\CoreMonitor_Full_<Datum>.zip; siehe README.de.md).
-- Sprache: oben auf der Seite DE | EN umschalten (Voreinstellung = Browsersprache).
+- Sprache: oben auf der Seite DE | EN umschalten (Voreinstellung = Englisch; die Wahl wird gemerkt).
   Startsprache des Servers: vorher  set KM_LANG=de  bzw.  set KM_LANG=en
 - Beschreibung und Projektbericht liegen zweisprachig bei: README.de.md / README.md,
   Projektbericht_Parallelisierung.pdf (Deutsch) / Project_Report_Core_Monitor.pdf (Englisch).

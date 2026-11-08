@@ -11,6 +11,9 @@ if exist "%~dp0python\python.exe" goto komplett
 set "PY=python"
 where python >nul 2>&1 || goto nopython
 python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" || goto oldpython
+rem keep pip itself current (quietly) and suppress pip's "new release available" notice
+set PIP_DISABLE_PIP_VERSION_CHECK=1
+python -m pip install -q --upgrade --no-warn-script-location pip
 python -m pip install -q -r requirements.txt || goto pipfail
 rem numba is optional (faster computation method); without numba numpy is used
 python -m pip install -q numba || echo numba not installed - Mandelbrot runs with numpy (numba nicht installiert)
