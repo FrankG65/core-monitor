@@ -1,0 +1,41 @@
+# Own measurements and results (stay on this PC)
+benchmarks/
+
+# Distribution packages and download cache (built with export_full.bat / export_lite.bat)
+export/
+
+# Local tool settings
+.claude/
+
+# Build outputs (created from the sources by start.bat / native\build.bat / cargo / dotnet)
+native/bin/
+csharp/bin/
+csharp/MandelBench/bin/
+csharp/MandelBench/obj/
+rust/mandelbench/target/
+*.exe
+*.dll
+*.cso
+*.obj
+*.pdb
+*.ilk
+*.lib
+*.exp
+
+# Embedded Python of the "Full" package
+python/
+
+# Python / numba caches
+__pycache__/
+*.py[cod]
+*.nbi
+*.nbc
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Windows
+Thumbs.db
+desktop.ini

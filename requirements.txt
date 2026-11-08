@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+psutil
+numpy
+gmpy2
+mpmath

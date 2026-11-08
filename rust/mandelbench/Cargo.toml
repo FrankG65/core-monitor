@@ -1,0 +1,12 @@
+[package]
+name = "mandelbench"
+version = "0.1.0"
+edition = "2021"
+
+# No external crates: the build needs no internet access.
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

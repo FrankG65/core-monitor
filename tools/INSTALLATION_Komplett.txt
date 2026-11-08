@@ -1,0 +1,70 @@
+KERN-MONITOR (Core Monitor) – Paket "Full" (Komplett)
+=====================================================
+
+Dieses Paket läuft auf jedem Windows-10/11-PC (64 Bit) OHNE Installation, OHNE Internet und OHNE Administratorrechte.
+Alles Nötige liegt bei:
+  - Python 3.11 (eingebettete Version) mit allen Paketen (FastAPI, numpy, numba, gmpy2, mpmath, …)  -> Ordner python\
+  - alle 13 Rechenverfahren fertig übersetzt:
+      C, C++, Assembler, GPU-Programm + vorübersetzte Shader      -> native\bin\
+      Rust                                                          -> rust\mandelbench\target\release\
+      C# als eigenständige .exe (kein .NET nötig)                   -> csharp\bin\
+  - die Quelltexte aller Teile (zum Nachlesen und Weiterentwickeln)
+
+STARTEN
+-------
+1. ZIP entpacken, z. B. nach C:\CoreMonitor (der Pfad darf Leerzeichen enthalten).
+2. start.bat doppelklicken.
+3. Der Browser öffnet http://127.0.0.1:8000 – falls nicht, diese Adresse selbst eingeben.
+   Läuft schon eine Seite, lädt sie sich nach einem Neustart selbst neu (kein zusätzlicher Tab).
+Beenden: das schwarze Fenster schließen.
+
+Der Server ist nur auf diesem PC erreichbar (127.0.0.1), nicht im Netzwerk.
+Anderer Port: in einer Eingabeaufforderung   set PORT=8001   und danach start.bat aufrufen.
+
+WAS DER PC MITBRINGEN MUSS
+--------------------------
+- Windows 10 oder 11, 64 Bit.
+- Für die GPU-Rechenverfahren: eine Grafikkarte mit Direct3D 11 und aktuellem Treiber (NVIDIA, AMD oder Intel).
+  "GPU double" braucht zusätzlich double-Unterstützung im Shader. Ohne passende Karte sind diese Einträge ausgegraut.
+- Für die SIMD-Rechenverfahren und Assembler: eine CPU mit AVX2 (fast alle seit ca. 2015). Sonst ausgegraut.
+Die Seite erkennt CPU und Grafikkarte beim Start selbst und zeigt alles unter "System" an.
+
+HINWEISE
+--------
+- Beim allerersten Start übersetzt numba seine Rechenroutine einmalig (einige Sekunden).
+- Virenscanner prüfen die mitgelieferten .exe-Dateien beim ersten Start manchmal etwas länger.
+- Messergebnisse werden im Ordner benchmarks\ gespeichert (CSV für Excel und JSON).
+- Neu bauen kann man das Paket auf einem Entwickler-PC mit export_full.bat
+  (ergibt export\CoreMonitor_Full_<Datum>.zip; siehe README.de.md).
+- Sprache: oben auf der Seite DE | EN umschalten (Voreinstellung = Browsersprache).
+  Startsprache des Servers: vorher  set KM_LANG=de  bzw.  set KM_LANG=en
+- Beschreibung und Projektbericht liegen zweisprachig bei: README.de.md / README.md,
+  Projektbericht_Parallelisierung.pdf (Deutsch) / Project_Report_Core_Monitor.pdf (Englisch).
+- Fachbegriffe (numba, SIMD, CCX, Kardioide ...) sind in README.de.md im Abschnitt "Begriffe kurz erklärt" erklärt, mit Links.
+
+VIRENSCANNER (wichtig, aber kein Grund zur Sorge)
+-------------------------------------------------
+Virenscanner (z. B. Microsoft Defender, Trend Micro) und Windows SmartScreen können bei diesem Programm Alarm
+schlagen oder Teile blockieren – das ist ein Fehlalarm und unbegründet. Die Programme prüfen nach Verhaltensmustern,
+und der Kern-Monitor hat einige, die auch Schadprogramme zeigen:
+  - selbst übersetzte .exe-Dateien ohne digitale Signatur und ohne "Bekanntheit" (C#, Rust, C, C++, Assembler, GPU),
+  - frisch entpackte, unbekannte Dateien aus einem ZIP (aus dem Internet, per Mail oder USB-Stick),
+  - viele gleichzeitig gestartete Prozesse (bis zu 48 Python-Worker) und 100 % Auslastung aller Kerne
+    (ähnlich wie ein Krypto-Miner).
+Mögliche Anzeichen:
+  - "Zugriff verweigert" beim ersten Start eines Rechenverfahrens oder ein langsamer erster Start,
+  - eine .exe wird in Quarantäne verschoben oder gelöscht -> das Rechenverfahren erscheint ausgegraut
+    mit dem Hinweis "Programm fehlt – vermutlich von einem Virenscanner ...",
+  - Warnung "Der Computer wurde durch Windows geschützt" (SmartScreen).
+Was tun:
+  1. Ein paar Sekunden warten bzw. start.bat neu starten – der Monitor wiederholt einen gesperrten Start
+     bis zu 10 Sekunden lang selbst; meist ist die Prüfung dann abgeschlossen.
+  2. Vor dem Entpacken: Rechtsklick auf die ZIP-Datei -> Eigenschaften -> "Zulassen" anhaken -> OK.
+     Bei SmartScreen: "Weitere Informationen" -> "Trotzdem ausführen".
+  3. In der Quarantäne des Virenscanners nachsehen und die Datei wiederherstellen.
+  4. Den Ordner des Kern-Monitors im Virenscanner als Ausnahme eintragen – NUR, wenn das Paket aus
+     vertrauenswürdiger Quelle stammt (selbst gebaut oder direkt vom Ersteller erhalten).
+  5. Wer sichergehen will: einzelne .exe-Dateien bei https://www.virustotal.com prüfen lassen,
+     oder das Paket "Lite" (Klein) nehmen und alles selbst aus den beiliegenden Quelltexten übersetzen.
+Den Virenscanner bitte NICHT abschalten. Die Python-Rechenverfahren (numba, numpy) und Pi laufen auch dann,
+wenn alle .exe-Dateien blockiert sind.

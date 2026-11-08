@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kern-Monitor</title>
+<link rel="stylesheet" href="/static/style.css">
+<script>
+  // Language (de/en): URL parameter ?lang=de|en (for this page load only), then the saved choice, otherwise the
+  // browser language. Set before rendering, so nothing flickers.
+  // Bilingual markup: <span data-l="de">…</span><span data-l="en">…</span> – CSS hides the other language.
+  // Attributes: data-en-title="…" (title), <option data-en="…"> – switched by app.js at startup.
+  // In scripts: L("Deutsch", "English").
+  window.LANG = (() => {
+    try { const q = new URLSearchParams(location.search).get("lang"); if (q === "de" || q === "en") return q; } catch (e) {}
+    try { const s = localStorage.getItem("km-lang"); if (s === "de" || s === "en") return s; } catch (e) {}
+    return (navigator.language || "en").toLowerCase().startsWith("de") ? "de" : "en";
+  })();
+  document.documentElement.lang = window.LANG;
+  function L(de, en) { return window.LANG === "en" ? en : de; }
+  document.title = L("Kern-Monitor", "Core Monitor");
+</script>
+</head>
+<body>
+<header>
+  <div>
+    <div class="title-row">
+      <h1><span data-l="de">Kern-Monitor</span><span data-l="en">Core Monitor</span></h1>
+      <div class="lang-switch" role="group" aria-label="Sprache / Language">
+        <button type="button" data-lang="de" title="Deutsch">DE</button><button type="button" data-lang="en" title="English">EN</button>
+      </div>
+    </div>
+    <div id="sysinfo" class="muted"><span data-l="de">verbinde …</span><span data-l="en">connecting …</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span id="s-total">–</span><label><span data-l="de">CPU gesamt</span><span data-l="en">CPU total</span></label></div>
+    <div class="stat"><span id="s-freq">–</span><label><span data-l="de">Takt</span><span data-l="en">Clock</span></label></div>
+    <div class="stat"><span id="s-mem">–</span><label id="s-mem-l">RAM</label></div>
+    <div class="stat"><span id="s-conn" class="dot"></span><label id="s-conn-l">Live</label></div>
+  </div>
+</header>
+
+<main>
+  <details class="panel system" id="sys-box">
+    <summary><b>System</b> <span data-l="de">(beim Start erkannt)</span><span data-l="en">(detected at startup)</span> · <span id="sys-short" class="muted">–</span></summary>
+    <div id="sys-detail" class="sys-grid"></div>
+  </details>
+
+  <div class="split">
+    <section class="panel">
+      <div class="panel-head">
+        <h2><span data-l="de">Mandelbrot-Menge – parallel berechnet</span><span data-l="en">Mandelbrot set – computed in parallel</span></h2>
+        <div class="muted small"><span data-l="de">Klick ins Bild: 4× hineinzoomen · Rechtsklick: herauszoomen</span><span data-l="en">Click the image: zoom in 4× · Right-click: zoom out</span></div>
+      </div>
+      <div class="controls">
+        <label><span data-l="de">Worker</span><span data-l="en">Workers</span> <input type="range" id="m-workers" min="1" max="48" value="48"><b id="m-workers-l">48</b></label>
+        <label title="lange × kurze Seite; bei Drehung im Hochformat" data-en-title="long × short side; portrait when rotated"><span data-l="de">Auflösung</span><span data-l="en">Resolution</span>
+          <select id="m-res">
+            <option value="800x500">800 × 500</option>
+            <option value="1280x800">1280 × 800</option>
+            <option value="1920x1200" selected>1920 × 1200</option>
+            <option value="2560x1600">2560 × 1600</option>
+            <option value="3840x2400">3840 × 2400</option>
+          </select></label>
+        <label><span data-l="de">Max. Iterationen</span><span data-l="en">Max. iterations</span>
+          <select id="m-iter">
+            <option>250</option><option selected>1000</option><option>2500</option><option>5000</option><option>20000</option>
+          </select></label>
+        <label><span data-l="de">Ausschnitt</span><span data-l="en">Region</span> <select id="m-region"></select></label>
+        <label><span data-l="de">Kachel</span><span data-l="en">Tile</span>
+          <select id="m-tile"><option>32</option><option>64</option><option selected>128</option><option>256</option></select> px</label>
+        <label><span data-l="de">Rechenverfahren</span><span data-l="en">Computation method</span> <select id="m-engine"></select></label>
+        <label title="An welche Threads die Worker gebunden werden (CPU-Affinität)" data-en-title="Which threads the workers are bound to (CPU affinity)"><span data-l="de">Platzierung</span><span data-l="en">Placement</span> <select id="m-place"></select></label>
+        <label title="In welcher Reihenfolge die Kacheln an die Worker gehen" data-en-title="In which order the tiles are handed to the workers"><span data-l="de">Reihenfolge</span><span data-l="en">Order</span> <select id="m-order"></select></label>
+      </div>
+      <div id="m-engine-desc" class="muted small engine-desc"></div>
+      <div class="buttons">
+        <button id="m-start" class="primary"><span data-l="de">Berechnen</span><span data-l="en">Compute</span></button>
+        <button id="m-stop"><span data-l="de">Stopp</span><span data-l="en">Stop</span></button>
+        <button id="m-reset"><span data-l="de">Gesamtansicht</span><span data-l="en">Full view</span></button>
+        <label class="check small"><input type="checkbox" id="m-tint"> <span data-l="de">Kacheln nach Worker einfärben</span><span data-l="en">Color tiles by worker</span></label>
+        <label class="check small"><input type="checkbox" id="m-rot" checked> <span data-l="de">um 90° gedreht</span><span data-l="en">rotated by 90°</span></label>
+        <label class="check small" title="Punkte in der großen Kardioide und im Kreis daneben per Formel sofort als „in der Menge“ werten – gleiches Bild, viel weniger Rechenarbeit"
+          data-en-title="Use a formula to count points in the large cardioid and in the bulb next to it as “in the set” right away – same image, much less computation">
+          <input type="checkbox" id="m-card"> <span data-l="de">Kardioide/Kreis überspringen</span><span data-l="en">Skip cardioid/bulb</span></label>
+      </div>
+      <div class="progress"><i id="m-bar"></i></div>
+      <div id="m-status" class="muted small"><span data-l="de">noch nicht berechnet</span><span data-l="en">not computed yet</span></div>
+      <div class="canvas-wrap" id="m-wrap">
+        <canvas id="m-img" width="1200" height="1920"></canvas>
+        <canvas id="m-tintcv" width="1200" height="1920"></canvas>
+      </div>
+      <div class="small muted" style="margin-top:8px"><span data-l="de">Kacheln je Worker (Lastverteilung)</span><span data-l="en">Tiles per worker (load balancing)</span></div>
+      <canvas id="m-dist" class="dist"></canvas>
+      <details class="explain">
+        <summary><span data-l="de">Was zeigt die Färbung nach Worker?</span><span data-l="en">What does coloring by worker show?</span></summary>
+        <ul data-l="de">
+          <li>Jede Farbe steht für einen Worker-Prozess. Die Kacheln liegen in einer gemeinsamen Warteschlange; wer fertig ist,
+            holt sich die nächste. So entsteht ein buntes, unregelmäßiges Muster.</li>
+          <li>Kacheln sind <b>unterschiedlich rechenaufwendig</b>: In der schwarzen Menge wird bis zur max. Iterationszahl gerechnet,
+            außen ist oft nach wenigen Schritten Schluss. Worker mit aufwendigen Kacheln schaffen weniger davon – das zeigen die
+            ungleich hohen Balken darunter.</li>
+          <li>Diese <b>dynamische Verteilung</b> gleicht die Last aus. Würde man das Bild starr in <span data-sys="logical">48</span> gleich große Streifen
+            teilen, müssten alle auf den Streifen mit dem meisten Schwarz warten.</li>
+          <li>Mit der Reihenfolge <b>„aufwendige Kacheln zuerst“</b> siehst du beim Rendern, dass zuerst die Kacheln im schwarzen
+            Inneren erscheinen und der Rand zuletzt. So bleibt am Ende keine lange Kachel übrig, auf die alle warten.</li>
+          <li>Beim Rechenverfahren <b>C#</b> stehen die Farben für Threads in einem einzigen Prozess statt für einzelne Prozesse.</li>
+        </ul>
+        <ul data-l="en">
+          <li>Each color stands for one worker process. The tiles wait in a shared queue; whoever is done
+            takes the next one. This creates a colorful, irregular pattern.</li>
+          <li>Tiles need <b>different amounts of computation</b>: inside the black set, every point runs up to the maximum iteration count,
+            while outside it often stops after a few steps. Workers that get demanding tiles finish fewer of them – that is what the
+            bars of unequal height below show.</li>
+          <li>This <b>dynamic distribution</b> balances the load. If you split the image rigidly into <span data-sys="logical">48</span> equal strips,
+            everyone would have to wait for the strip with the most black.</li>
+          <li>With the order <b>“demanding tiles first”</b> you can watch the tiles in the black interior appear first
+            and the edge last. That way no long tile is left at the end for everyone to wait on.</li>
+          <li>With the computation method <b>C#</b>, the colors stand for threads in a single process instead of separate processes.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2><span data-l="de">Auslastung pro Kern</span><span data-l="en">Load per core</span></h2>
+        <div class="muted small"><a href="#" id="sel-all"><span data-l="de">alle</span><span data-l="en">all</span></a> · <a href="#" id="sel-none"><span data-l="de">keine</span><span data-l="en">none</span></a> ·
+          <a href="#" id="sel-first"><span data-l="de">1. Thread je Kern</span><span data-l="en">1st thread per core</span></a></div>
+      </div>
+      <div id="topo-info" class="muted small"></div>
+      <div id="grid" class="ccx-grid"></div>
+      <div class="muted small" style="margin-top:6px"><span data-l="de">Klick auf einen Thread wählt ihn für den Last-Generator aus.</span><span data-l="en">Click a thread to select it for the load generator.</span></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2><span data-l="de">Skalierung: dasselbe Bild mit 1 … <span data-sys="logical">48</span> Workern</span><span data-l="en">Scaling: the same image with 1 … <span data-sys="logical">48</span> workers</span></h2>
+      <div class="muted small"><span data-l="de">Ausschnitt, Kachelgröße, Rechenverfahren, Platzierung und Reihenfolge wie oben</span><span data-l="en">Region, tile size, computation method, placement and order as above</span></div>
+    </div>
+    <div class="controls">
+      <label title="lange × kurze Seite; bei Drehung im Hochformat" data-en-title="long × short side; portrait when rotated"><span data-l="de">Auflösung</span><span data-l="en">Resolution</span>
+        <select id="b-res">
+          <option value="1280x800">1280 × 800</option>
+          <option value="1920x1200">1920 × 1200</option>
+          <option value="2560x1600" selected>2560 × 1600</option>
+          <option value="3840x2400">3840 × 2400</option>
+        </select></label>
+      <label><span data-l="de">Max. Iterationen</span><span data-l="en">Max. iterations</span>
+        <select id="b-iter"><option>1000</option><option>2500</option><option selected>5000</option><option>20000</option></select></label>
+      <label><span data-l="de">Wiederholungen</span><span data-l="en">Repetitions</span>
+        <select id="b-rep"><option value="1">1</option><option value="3" selected data-en="3 (median)">3 (Median)</option><option value="5" data-en="5 (median)">5 (Median)</option></select></label>
+      <label><span data-l="de">Worker-Stufen</span><span data-l="en">Worker steps</span> <b id="b-plan" class="small"></b></label>
+      <label title="Relative Beschleunigung zeigt, wie gut etwas skaliert; die Laufzeit zeigt, was absolut schneller ist"
+        data-en-title="Relative speedup shows how well something scales; run time shows what is faster in absolute terms"><span data-l="de">Diagramm</span><span data-l="en">Chart</span>
+        <select id="b-view"><option value="speedup" data-en="Speedup (×)">Beschleunigung (×)</option><option value="zeit" data-en="Run time (s, logarithmic)">Laufzeit (s, logarithmisch)</option></select></label>
+      <label title="Welche gespeicherten Läufe im Diagramm erscheinen (Platzierung Windows, zeilenweise); der aktuelle Lauf ist immer dabei"
+        data-en-title="Which saved runs appear in the chart (placement Windows, row by row); the current run is always included"><span data-l="de">Vergleich</span><span data-l="en">Comparison</span>
+        <select id="b-cmp"><option value="beide" data-en="Languages without and with SIMD">Sprachen ohne und mit SIMD</option><option value="skalar" data-en="Languages without SIMD">Sprachen ohne SIMD</option>
+          <option value="simd" data-en="Languages with SIMD">Sprachen mit SIMD</option><option value="alle" data-en="All variants">alle Varianten</option></select></label>
+    </div>
+    <div class="buttons">
+      <button id="b-start" class="primary"><span data-l="de">Skalierungstest starten</span><span data-l="en">Start scaling test</span></button>
+      <button id="b-stop"><span data-l="de">Abbrechen</span><span data-l="en">Cancel</span></button>
+    </div>
+    <div id="b-status" class="muted small"><span data-l="de">noch nicht ausgeführt</span><span data-l="en">not run yet</span></div>
+    <div class="bench-grid">
+      <div id="b-chart" class="chart"></div>
+      <div id="b-table"></div>
+    </div>
+    <details class="explain">
+      <summary><span data-l="de">Wie lese ich das Diagramm – und warum nicht <span data-sys="logical">48</span>×?</span><span data-l="en">How do I read the chart – and why not <span data-sys="logical">48</span>×?</span></summary>
+      <h3><span data-l="de">Die 13 Rechenverfahren</span><span data-l="en">The 13 computation methods</span></h3>
+      <div id="engine-table"></div>
+      <ul data-l="de">
+        <li class="ref-note">Die Messwerte in dieser Erklärung stammen vom <b>Referenzrechner</b> (AMD Threadripper 3960X, 24 Kerne / 48 Threads, NVIDIA RTX 3090). Dieser Rechner: <span data-sys="summary">–</span>. Eigene Werte liefert der Skalierungstest.</li>
+        <li><b>Beschleunigung</b> = Zeit mit 1 Worker ÷ Zeit mit n Workern. Die gestrichelte Linie ist das Ideal (n Worker = n-mal
+          so schnell), die blaue Linie das gemessene Ergebnis. <b>Effizienz</b> = Beschleunigung ÷ n.</li>
+        <li><b>Hauptbremse ist die Größe der Aufgabe</b>, nicht SMT: Mit 48 Workern dauert ein Bild nur noch 0,3–1 s.
+          Dann fallen der <b>Leerlauf am Ende</b> (die letzten, oft aufwendigen Kacheln laufen noch, die übrigen Worker warten) und die
+          Verwaltung im Hauptprozess stark ins Gewicht. Gemessen: Bei 4-facher Arbeit (20 000 statt 5 000 Iterationen) steigt
+          das Ergebnis mit 48 Workern von rund 18× auf rund 25×. Die CPU-Zeit aller Worker zusammen bleibt dabei fast gleich;
+          verloren geht reine Wartezeit.</li>
+        <li><b>Ab 24 Workern</b> teilen sich zwei Worker einen Kern (SMT). Für Mandelbrot macht das nur 5–8 % aus (siehe Heatmap-Erklärung).
+          Der Knick bei 24 liegt deshalb vor allem daran, dass die Laufzeit dort schon sehr kurz ist.</li>
+        <li><b>Platzierung:</b> Feste Bindung an Threads ändert wenig. „1 Thread je Kern zuerst“ war bei 8–16 Workern
+          5–10 % schneller als „Windows entscheidet“, bei 48 Workern sind alle Varianten gleich.</li>
+        <li><b>Reihenfolge „aufwendige Kacheln zuerst“:</b> Vorab wird jede Kachel mit 8 × 8 Stichproben grob geschätzt
+          (≈ 15 ms, in der Zeit enthalten). Die aufwendigen Kacheln mit viel Schwarz laufen dann zuerst, und am Ende bleiben nur
+          kurze übrig. Das verkürzt den Leerlauf am Schluss: Mit 24–48 Workern wird es 10–20 % schneller (numba: 18× → 22×).</li>
+        <li><b>C# (.NET, echte Threads)</b> rechnet bitgenau dasselbe Bild. Mit 1 Thread ist es genauso schnell wie numba,
+          denn beide erzeugen fast gleichen Maschinencode. Der Vorteil liegt beim Drumherum: Start in 0,14 s statt 2–6 s
+          für 48 Prozesse, gemeinsamer Speicher, keine Prozessgrenzen. Mit 48 Threads wird es 27× schneller.</li>
+        <li><b>C# + SIMD (AVX2)</b> rechnet in jedem Thread 4 Pixel gleichzeitig: mit 1 Thread 3,7× schneller als ohne
+          (1,65 s statt 6,1 s), ebenfalls bitgenau dasselbe Bild. Die <b>relative</b> Beschleunigung ist etwas kleiner
+          (≈ 24× statt 27×), weil die Rechnung dann so kurz ist (0,07 s), dass Verwaltung und Datenübergabe stärker zählen
+          und SMT weniger bringt (die Rechenwerke sind schon besser ausgelastet). <b>Absolut</b> ist es mit Abstand am
+          schnellsten. Das zeigt die Ansicht „Laufzeit (s, logarithmisch)“.</li>
+        <li><b>Rust</b> (echte Threads, ohne und mit SIMD) rechnet ebenfalls bitgenau dasselbe Bild und ist praktisch so
+          schnell wie C#: Beide übersetzen in nahezu denselben Maschinencode. Mit 48 Threads und SIMD war Rust etwas
+          schneller (0,062 s gegenüber 0,070 s), und es startet in 0,04 s (C#/.NET 0,14 s, Python-Pool mehrere Sekunden).
+          Der große Sprung kommt also nicht von der Sprache, sondern von echten Threads und von SIMD.</li>
+        <li><b>C, C++ und Assembler</b> (Visual Studio, <code>/O2 /arch:AVX2 /fp:precise</code>) liefern ebenfalls bitgenau
+          dasselbe Bild und liegen innerhalb weniger Prozent bei C# und Rust: ohne SIMD alle bei ≈ 6,1 s (1 Thread) bzw.
+          0,22–0,24 s (48 Threads), mit SIMD bei ≈ 1,65 s bzw. 0,06–0,07 s.</li>
+        <li><b>Warum liegen die Sprachen so dicht beieinander?</b> Die innere Schleife besteht aus wenigen Multiplikationen
+          und Additionen, die jeder dieser Compiler (MSVC, LLVM bei Rust, RyuJIT bei C#, LLVM bei numba) in praktisch dieselben
+          Maschinenbefehle übersetzt. Die Grenze setzt der Prozessor: Jeder Schritt muss auf das Ergebnis des vorigen warten.
+          Unterschiede entstehen nur im Drumherum: Threads oder Prozesse, Start, Datenübergabe.</li>
+        <li><b>Was bringt Assembler?</b> Der handgeschriebene AVX2-Kern (<code>native/asm/kernel.asm</code>, kommentiert)
+          ist genauso schnell wie der Compiler, nicht schneller: Der Compiler erzeugt für so eine Schleife bereits optimalen
+          Code. Mehr ginge nur mit Tricks, die in jeder Sprache gleich möglich sind: mehrere Pixelgruppen verschränkt rechnen,
+          damit der Prozessor die Wartezeit füllt, FMA (ändert das Bild in der letzten Stelle) oder <code>float</code> statt
+          <code>double</code> (8 statt 4 Pixel, aber ungenau beim Zoomen). AVX-512 hat dieser Prozessor nicht.</li>
+        <li><b>Kardioide/Kreis überspringen</b> (klügerer Algorithmus): Punkte in der großen Kardioide und im Kreis links
+          daneben liegen sicher in der Menge, das zeigt eine einfache Formel. Ohne Test laufen genau diese Punkte bis zur
+          maximalen Iterationszahl, sie sind die rechenaufwendigsten im Bild. Das Bild bleibt <b>exakt gleich</b> (geprüft in allen
+          Rechenverfahren, auch direkt an den Rändern). Gemessen bei 5000 Iterationen: Gesamtansicht mit 1 Thread 6–9× schneller,
+          mit 48 Threads 2×; Zoom auf den Kardioiden-Rand bis 14×; Ausschnitte ohne Kardioide (Seepferdchental) unverändert.
+          Mit vielen Threads ist der Gewinn kleiner, weil die übrige Arbeit ungleich verteilt und die Laufzeit sehr kurz wird.
+          Ein besserer Algorithmus schlägt hier mehr Kerne: 1 Thread mit Test ist schneller als 8 Threads ohne.</li>
+        <li><b>GPU (Grafikkarte; gemessen mit einer RTX 3090)</b> über einen Direct3D-Compute-Shader (<code>native/gpu/mandel.hlsl</code>):
+          Jede der über 10 000 Recheneinheiten der Grafikkarte rechnet einen Bildpunkt. In <b>float</b> rechnet die GPU das Standardbild in
+          ≈ 0,01 s, mit 20 000 Iterationen ≈ 5× schneller als die beste CPU (Rust SIMD, 48 Threads). Aber float ist ungenauer:
+          In der Gesamtansicht weichen 0,3 % der Pixel ab, in tiefen Zooms 4–17 % (die Strukturen werden sichtbar anders).
+          In <b>double</b> ist die GPU sogar langsamer als die CPU (0,2–0,4×), denn diese Grafikkarte rechnet double nur mit
+          1/64 der float-Geschwindigkeit. Auch dann weichen 0,01–0,5 % der Pixel ab: Der Grafiktreiber übersetzt den Shader
+          auf eigene Weise, das lässt sich nicht vollständig steuern.</li>
+        <li>Bei der GPU braucht zusätzlich das Drumherum Zeit: Ergebnisse zurück zur CPU kopieren, auf der CPU einfärben, Bilddaten an
+          den Server schicken. Auf der Seite braucht „GPU float“ deshalb ≈ 0,08 s statt der reinen 0,01–0,03 s. Die GPU-Last
+          erscheint <b>nicht</b> in der Heatmap, die zeigt nur die CPU-Kerne (dort sieht man nur die kurze Einfärbung).</li>
+        <li><b>Beschleunigung oder Laufzeit?</b> Die Beschleunigung vergleicht jede Variante nur mit sich selbst (1 Worker)
+          und zeigt, wie gut sie skaliert. Welche Variante wirklich schneller ist, zeigt nur die Laufzeit.</li>
+        <li>Das Diagramm zeigt für jede Kombination aus Rechenverfahren, Platzierung und Reihenfolge den neuesten Lauf mit
+          denselben Bildeinstellungen.</li>
+        <li>Der <b>Prozessstart</b> (rechte Spalte) ist nicht in den Zeiten enthalten. Er wird getrennt gemessen, weil der Pool
+          bei normaler Nutzung bestehen bleibt.</li>
+      </ul>
+      <ul data-l="en">
+        <li class="ref-note">The measurements in this explanation come from the <b>reference machine</b> (AMD Threadripper 3960X, 24 cores / 48 threads, NVIDIA RTX 3090). This computer: <span data-sys="summary">–</span>. The scaling test gives you your own values.</li>
+        <li><b>Speedup</b> = time with 1 worker ÷ time with n workers. The dashed line is the ideal (n workers = n times
+          as fast), the blue line is the measured result. <b>Efficiency</b> = speedup ÷ n.</li>
+        <li><b>The main brake is the size of the task</b>, not SMT: with 48 workers, one image takes only 0.3–1 s.
+          At that point the <b>idle time at the end</b> (the last, often demanding tiles are still running while the other workers wait) and
+          the bookkeeping in the main process weigh heavily. Measured: with 4 times the work (20,000 instead of 5,000 iterations),
+          the result with 48 workers rises from about 18× to about 25×. The CPU time of all workers together stays almost the same;
+          what is lost is pure waiting time.</li>
+        <li><b>From 24 workers on</b>, two workers share one core (SMT). For Mandelbrot this costs only 5–8 % (see the heatmap explanation).
+          The bend at 24 is therefore mainly because the run time there is already very short.</li>
+        <li><b>Placement:</b> binding to fixed threads changes little. “1 thread per core first” was 5–10 % faster than
+          “Windows decides” with 8–16 workers; with 48 workers all variants are equal.</li>
+        <li><b>Order “demanding tiles first”:</b> beforehand, each tile is roughly estimated with 8 × 8 samples
+          (≈ 15 ms, included in the time). The demanding tiles with a lot of black then run first, and only short ones are left
+          at the end. This shortens the idle time at the end: with 24–48 workers it gets 10–20 % faster (numba: 18× → 22×).</li>
+        <li><b>C# (.NET, real threads)</b> computes a bit-identical image. With 1 thread it is exactly as fast as numba,
+          because both produce almost the same machine code. The advantage lies in everything around it: startup in 0.14 s instead
+          of 2–6 s for 48 processes, shared memory, no process boundaries. With 48 threads it gets 27× faster.</li>
+        <li><b>C# + SIMD (AVX2)</b> computes 4 pixels at once in each thread: with 1 thread 3.7× faster than without
+          (1.65 s instead of 6.1 s), again a bit-identical image. The <b>relative</b> speedup is somewhat smaller
+          (≈ 24× instead of 27×), because the computation is then so short (0.07 s) that bookkeeping and data transfer count more
+          and SMT helps less (the execution units are already busier). In <b>absolute</b> terms it is by far the
+          fastest. The “Run time (s, logarithmic)” view shows this.</li>
+        <li><b>Rust</b> (real threads, without and with SIMD) also computes a bit-identical image and is practically as
+          fast as C#: both compile to nearly the same machine code. With 48 threads and SIMD, Rust was slightly
+          faster (0.062 s versus 0.070 s), and it starts in 0.04 s (C#/.NET 0.14 s, Python pool several seconds).
+          So the big jump does not come from the language, but from real threads and from SIMD.</li>
+        <li><b>C, C++ and assembler</b> (Visual Studio, <code>/O2 /arch:AVX2 /fp:precise</code>) also deliver a bit-identical
+          image and are within a few percent of C# and Rust: without SIMD all at ≈ 6.1 s (1 thread) or
+          0.22–0.24 s (48 threads), with SIMD at ≈ 1.65 s or 0.06–0.07 s.</li>
+        <li><b>Why are the languages so close to each other?</b> The inner loop consists of a few multiplications
+          and additions, which each of these compilers (MSVC, LLVM for Rust, RyuJIT for C#, LLVM for numba) turns into practically
+          the same machine instructions. The limit is set by the processor: each step has to wait for the result of the previous one.
+          Differences only arise in everything around it: threads or processes, startup, data transfer.</li>
+        <li><b>What does assembler bring?</b> The hand-written AVX2 kernel (<code>native/asm/kernel.asm</code>, commented)
+          is exactly as fast as the compiler, not faster: for a loop like this the compiler already produces optimal
+          code. More would only be possible with tricks that work equally well in any language: computing several pixel groups
+          interleaved so the processor fills the waiting time, FMA (changes the image in the last digit) or <code>float</code> instead
+          of <code>double</code> (8 instead of 4 pixels, but inaccurate when zooming). This processor does not have AVX-512.</li>
+        <li><b>Skip cardioid/bulb</b> (smarter algorithm): points in the large cardioid and in the bulb to its left
+          are certainly in the set; a simple formula shows this. Without the test, exactly these points run up to the
+          maximum iteration count – they are the most demanding points in the image. The image stays <b>exactly the same</b> (checked
+          in all computation methods, right at the edges too). Measured at 5000 iterations: full view 6–9× faster with 1 thread,
+          2× with 48 threads; zoom on the cardioid edge up to 14×; regions without the cardioid (Seahorse Valley) unchanged.
+          With many threads the gain is smaller, because the remaining work is unevenly distributed and the run time becomes very short.
+          A better algorithm beats more cores here: 1 thread with the test is faster than 8 threads without it.</li>
+        <li><b>GPU (graphics card; measured with an RTX 3090)</b> via a Direct3D compute shader (<code>native/gpu/mandel.hlsl</code>):
+          each of the graphics card's more than 10,000 compute units computes one pixel. In <b>float</b> the GPU computes the standard image in
+          ≈ 0.01 s; with 20,000 iterations it is ≈ 5× faster than the best CPU (Rust SIMD, 48 threads). But float is less precise:
+          in the full view 0.3 % of the pixels differ, in deep zooms 4–17 % (the structures look visibly different).
+          In <b>double</b> the GPU is even slower than the CPU (0.2–0.4×), because this graphics card computes double at only
+          1/64 of its float speed. Even then 0.01–0.5 % of the pixels differ: the graphics driver compiles the shader
+          in its own way, and that cannot be fully controlled.</li>
+        <li>With the GPU, everything around it takes extra time: copying results back to the CPU, coloring them on the CPU, sending
+          image data to the server. On the page, “GPU float” therefore takes ≈ 0.08 s instead of the pure 0.01–0.03 s. The GPU load
+          does <b>not</b> appear in the heatmap, which only shows the CPU cores (there you only see the short coloring step).</li>
+        <li><b>Speedup or run time?</b> Speedup compares each variant only with itself (1 worker)
+          and shows how well it scales. Only the run time shows which variant is really faster.</li>
+        <li>For each combination of computation method, placement and order, the chart shows the latest run with
+          the same image settings.</li>
+        <li><b>Process startup</b> (right column) is not included in the times. It is measured separately because the pool
+          stays alive during normal use.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="panel" id="pi-panel">
+    <div class="panel-head">
+      <h2><span data-l="de">Pi berechnen – und wo Parallelisierung an Grenzen stößt</span><span data-l="en">Computing pi – and where parallelization hits its limits</span></h2>
+      <div class="muted small"><span data-l="de">Chudnovsky-Formel mit Binary Splitting, große Zahlen mit GMP</span><span data-l="en">Chudnovsky formula with binary splitting, big numbers with GMP</span></div>
+    </div>
+    <div class="controls">
+      <label><span data-l="de">Nachkommastellen</span><span data-l="en">Decimal places</span>
+        <select id="pi-digits">
+          <option value="1000" data-en="1,000">1 000</option><option value="10000" data-en="10,000">10 000</option><option value="100000" data-en="100,000">100 000</option>
+          <option value="1000000" selected data-en="1 million">1 Million</option><option value="10000000" data-en="10 million">10 Millionen</option>
+          <option value="50000000" data-en="50 million">50 Millionen</option><option value="100000000" data-en="100 million">100 Millionen</option>
+        </select></label>
+      <label><span data-l="de">Worker</span><span data-l="en">Workers</span> <input type="range" id="pi-workers" min="1" max="48" value="48"><b id="pi-workers-l">48</b></label>
+    </div>
+    <div class="buttons">
+      <button id="pi-start" class="primary"><span data-l="de">Pi berechnen</span><span data-l="en">Compute pi</span></button>
+      <button id="pi-stop"><span data-l="de">Stopp</span><span data-l="en">Stop</span></button>
+      <a id="pi-dl" class="button-link" href="/api/pi/download" download hidden><span data-l="de">Alle Stellen herunterladen (.txt)</span><span data-l="en">Download all digits (.txt)</span></a>
+    </div>
+    <div class="progress"><i id="pi-bar"></i></div>
+    <div id="pi-status" class="muted small"><span data-l="de">noch nicht berechnet</span><span data-l="en">not computed yet</span></div>
+    <div id="pi-phases" class="phases"></div>
+    <div id="pi-result" class="pi-digits" hidden></div>
+
+    <h3 class="sub"><span data-l="de">Skalierungstest</span><span data-l="en">Scaling test</span></h3>
+    <div class="controls">
+      <label><span data-l="de">Nachkommastellen</span><span data-l="en">Decimal places</span>
+        <select id="pib-digits"><option value="1000000" data-en="1 million">1 Million</option><option value="10000000" selected data-en="10 million">10 Millionen</option>
+          <option value="50000000" data-en="50 million">50 Millionen</option></select></label>
+      <label><span data-l="de">Wiederholungen</span><span data-l="en">Repetitions</span>
+        <select id="pib-rep"><option value="1">1</option><option value="3" selected data-en="3 (median)">3 (Median)</option></select></label>
+      <label><span data-l="de">Worker-Stufen</span><span data-l="en">Worker steps</span> <b id="pib-plan" class="small"></b></label>
+    </div>
+    <div class="buttons">
+      <button id="pib-start" class="primary"><span data-l="de">Skalierungstest starten</span><span data-l="en">Start scaling test</span></button>
+      <button id="pib-stop"><span data-l="de">Abbrechen</span><span data-l="en">Cancel</span></button>
+    </div>
+    <div id="pib-status" class="muted small"><span data-l="de">noch nicht ausgeführt</span><span data-l="en">not run yet</span></div>
+    <div class="bench-grid">
+      <div id="pib-chart" class="chart"></div>
+      <div id="pib-table"></div>
+    </div>
+    <details class="explain">
+      <summary><span data-l="de">Was zeigt dieser Test – und warum wird es mit mehr Kernen kaum schneller?</span><span data-l="en">What does this test show – and why does it barely get faster with more cores?</span></summary>
+      <ul data-l="de">
+        <li class="ref-note">Die Messwerte in dieser Erklärung stammen vom <b>Referenzrechner</b> (AMD Threadripper 3960X, 24 Kerne / 48 Threads, NVIDIA RTX 3090). Dieser Rechner: <span data-sys="summary">–</span>. Eigene Werte liefert der Skalierungstest.</li>
+        <li><b>Der Ablauf hat vier Phasen.</b> Nur die erste ist voll parallel: Die Summe der Chudnovsky-Reihe wird in
+          so viele Blöcke geteilt, wie es Worker gibt, und jeder Worker rechnet seinen Block aus.</li>
+        <li><b>Zusammenführen:</b> Die Teilergebnisse werden paarweise kombiniert, wie bei einem Turnier. In der ersten
+          Runde arbeitet noch die Hälfte der Worker, dann ein Viertel, ein Achtel … und im Finale nur einer. Gerade dort sind die Zahlen aber am
+          größten (Millionen Stellen), und eine einzelne riesige Multiplikation lässt sich mit GMP nicht auf mehrere Kerne aufteilen.</li>
+        <li><b>Wurzel und Division</b> sowie die <b>Umwandlung in Dezimalziffern</b> sind je eine einzige große Rechnung
+          und laufen komplett seriell, egal wie viele Kerne da sind.</li>
+        <li>Das ist das <b>Amdahlsche Gesetz</b>: Ist ein Anteil s der Arbeit seriell, wird es höchstens 1/s-mal schneller.
+          Bei 10 Millionen Stellen brauchen allein Wurzel, Division und Umwandlung 2,7 von 8,3 s (ein Drittel). Dazu kommen
+          die obersten, größten Multiplikationen beim Zusammenführen. Gemessen ist daher bei etwa 2,1× Schluss (24–32 Worker),
+          mit 48 Workern wird es sogar wieder langsamer, weil mehr Blöcke mehr Zusammenführen bedeuten. Beim Mandelbrot ist
+          praktisch nichts seriell, deshalb geht es dort bis 25×.</li>
+        <li><b>In der Heatmap</b> sieht man das direkt: einen kurzen roten Streifen über viele Zeilen (Reihe), dann immer
+          weniger Zeilen (Zusammenführen), und zuletzt sekundenlang nur noch <b>eine einzige</b> helle Zeile (Abschluss).
+          Am besten mit 10 Millionen Stellen ausprobieren.</li>
+        <li><b>Prüfung:</b> Das Ergebnis wird mit <i>mpmath</i> verglichen, einer unabhängigen Implementierung
+          (bis 1 Million Stellen, darüber die ersten 1 Million). Gerechnet wird mit 20 Schutzstellen, damit die letzten
+          angezeigten Stellen nicht durch Rundung verfälscht sind.</li>
+      </ul>
+      <ul data-l="en">
+        <li class="ref-note">The measurements in this explanation come from the <b>reference machine</b> (AMD Threadripper 3960X, 24 cores / 48 threads, NVIDIA RTX 3090). This computer: <span data-sys="summary">–</span>. The scaling test gives you your own values.</li>
+        <li><b>The computation has four phases.</b> Only the first one is fully parallel: the sum of the Chudnovsky series is split into
+          as many blocks as there are workers, and each worker computes its block.</li>
+        <li><b>Merging:</b> the partial results are combined in pairs, like in a tournament. In the first
+          round half of the workers are still busy, then a quarter, an eighth … and in the final only one. But that is exactly where the numbers
+          are largest (millions of digits), and with GMP a single huge multiplication cannot be split across several cores.</li>
+        <li><b>Square root and division</b> as well as the <b>conversion to decimal digits</b> are each one single large computation
+          and run completely serially, no matter how many cores there are.</li>
+        <li>This is <b>Amdahl's law</b>: if a fraction s of the work is serial, it can get at most 1/s times faster.
+          At 10 million digits, square root, division and conversion alone take 2.7 of 8.3 s (one third). On top of that come
+          the topmost, largest multiplications during merging. As measured, it therefore tops out at about 2.1× (24–32 workers);
+          with 48 workers it even gets slower again, because more blocks mean more merging. With Mandelbrot practically
+          nothing is serial, which is why it goes up to 25× there.</li>
+        <li><b>In the heatmap</b> you can see this directly: a short red stripe across many rows (series), then fewer and
+          fewer rows (merging), and finally, for seconds, only <b>one single</b> bright row (final step).
+          Best tried with 10 million digits.</li>
+        <li><b>Check:</b> the result is compared with <i>mpmath</i>, an independent implementation
+          (up to 1 million digits; beyond that, the first 1 million). The computation uses 20 guard digits so that the last
+          displayed digits are not distorted by rounding.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2><span data-l="de">Verlauf (Heatmap, letzte 2 Minuten)</span><span data-l="en">History (heatmap, last 2 minutes)</span></h2>
+      <div class="legend small"><span>0 %</span><i class="ramp"></i><span>100 %</span></div>
+    </div>
+    <div class="heat-box">
+      <div id="heat-rows" class="heat-rows"></div>
+      <div class="heat-main">
+        <canvas id="heat"></canvas>
+        <div id="heat-lines" class="heat-lines"></div>
+        <div class="heat-time small muted"><span><span data-l="de">vor 2 min</span><span data-l="en">2 min ago</span></span><span><span data-l="de">vor 1 min</span><span data-l="en">1 min ago</span></span><span><span data-l="de">jetzt</span><span data-l="en">now</span></span></div>
+      </div>
+    </div>
+    <details class="explain">
+      <summary><span data-l="de">Was sehe ich hier – und worauf sollte ich achten?</span><span data-l="en">What am I looking at – and what should I watch for?</span></summary>
+      <div class="explain-grid" data-l="de">
+        <div>
+          <h3>Aufbau</h3>
+          <ul>
+            <li><b>Jede Zeile</b> ist ein logischer Prozessor (Thread): oben Thread 0, unten Thread <span data-sys="lastThread">47</span>.</li>
+            <li data-if="smt"><b><span data-sys="tpcWord">Zwei</span> benachbarte Zeilen</b> gehören zu <b>einem physischen Kern</b>. Das sind die
+              beiden SMT-Threads („Hyper-Threading“): zwei Befehlsströme, die sich Rechenwerke und Cache eines Kerns teilen.</li>
+            <li data-if="l3"><b>Je <span data-sys="l3Threads">6</span> Zeilen</b> bilden eine L3-Gruppe (bei AMD „CCX“: <span data-sys="l3Cores">3</span> Kerne mit gemeinsamem L3-Cache), links beschriftet und durch Linien getrennt.</li>
+            <li><b>Jede Spalte</b> ist eine Sekunde. Rechts ist <b>jetzt</b>, das Bild wandert nach links; nach 2 Minuten fällt es heraus.</li>
+            <li><b>Farbe</b> = mittlere Auslastung des Threads in dieser Sekunde: dunkel 0 %, grün ≈ 35 %, orange ≈ 70 %, rot 100 %.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Typische Muster</h3>
+          <ul>
+            <li><b>Mandelbrot mit <span data-sys="logical">48</span> Workern:</b> ein schmaler, fast durchgehend roter <b>senkrechter Streifen</b> über alle
+              Zeilen – alle Threads rechnen gleichzeitig. Dauert die Berechnung unter 1 s, ist der Streifen nur eine Spalte
+              breit und oft nicht ganz rot, weil eine Spalte den Mittelwert einer ganzen Sekunde zeigt.</li>
+            <li><b>Wenige Worker (z. B. 4):</b> nur einzelne Zeilen leuchten, dafür länger. Welche Zeilen, entscheidet Windows.
+              Auf dem Referenzrechner (Threadripper 3960X) landeten 4 Worker in Tests meist dicht beieinander in <b>einer</b> CCX (z. B. Threads 24–27),
+              also <b>paarweise auf beiden Threads desselben Kerns</b>, obwohl andere Kerne frei waren. Mit der Einstellung
+              „Platzierung“ oben kannst du das gezielt steuern und in der Heatmap vergleichen: „1 Thread je Kern zuerst“ ergibt
+              einzelne, über alle CCX verstreute Zeilen, „kompakt“ einen dichten Block von oben.</li>
+            <li><b>Skalierungstest:</b> eine <b>Treppe</b>. Erst ein langer Balken in wenigen Zeilen (1 Worker), dann immer
+              kürzere Blöcke über immer mehr Zeilen. Die rote Fläche (= Rechenarbeit) bleibt ungefähr gleich groß,
+              sie wird nur auf mehr Threads verteilt.</li>
+            <li><b>Last-Generator mit Affinität:</b> genau die gewählten Zeilen sind rot. Mit „1. Thread je Kern“ entsteht ein
+              Zebramuster (jede zweite Zeile). Ohne Affinität wandert die Last zwischen den Zeilen, weil Windows Prozesse verschiebt.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Worauf achten</h3>
+          <ul>
+            <li><b>Ausgefranstes Ende eines Laufs:</b> einige Zeilen werden früher dunkel als andere. Das ist
+              <b>Lastungleichgewicht</b>: Am Schluss sind nur noch wenige Kacheln übrig, die übrigen Worker haben nichts mehr zu tun.
+              Kacheln in der schwarzen Menge sind besonders rechenaufwendig, weil dort bis zur max. Iterationszahl gerechnet wird.</li>
+            <li><b>Beide Threads eines Kerns rot</b> heißt: Zwei Worker teilen sich einen Kern. Bei Mandelbrot macht das
+              überraschend wenig aus, gemessen nur 5–8 % pro Worker. Jeder Rechenschritt wartet auf das Ergebnis des vorigen,
+              ein einzelner Thread lässt den Kern daher großteils warten, und der zweite Thread füllt diese Lücken.
+              Bei anderen Aufgaben (z. B. speicherlastigen) kann das ganz anders aussehen.</li>
+            <li><b>Grüne Einzelpunkte im Ruhezustand</b> sind andere Programme (Browser, Windows-Dienste) – das Grundrauschen.</li>
+            <li><b>Vergleich mit der Kernansicht oben:</b> Sie zeigt denselben Messwert, aber nur den aktuellen Stand und
+              die letzten 60 s je Thread; die Heatmap zeigt alle Threads und den zeitlichen Ablauf auf einen Blick.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="explain-grid" data-l="en">
+        <div>
+          <h3>Layout</h3>
+          <ul>
+            <li><b>Each row</b> is one logical processor (thread): thread 0 at the top, thread <span data-sys="lastThread">47</span> at the bottom.</li>
+            <li data-if="smt"><b><span data-sys="tpcWord">Two</span> adjacent rows</b> belong to <b>one physical core</b>. These are the
+              core's SMT threads (“Hyper-Threading”): instruction streams that share the execution units and cache of one core.</li>
+            <li data-if="l3"><b>Every <span data-sys="l3Threads">6</span> rows</b> form an L3 group (on AMD a “CCX”: <span data-sys="l3Cores">3</span> cores with a shared L3 cache), labeled on the left and separated by lines.</li>
+            <li><b>Each column</b> is one second. <b>Now</b> is on the right, and the image moves to the left; after 2 minutes it drops out.</li>
+            <li><b>Color</b> = average load of the thread in that second: dark 0 %, green ≈ 35 %, orange ≈ 70 %, red 100 %.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Typical patterns</h3>
+          <ul>
+            <li><b>Mandelbrot with <span data-sys="logical">48</span> workers:</b> a narrow, almost entirely red <b>vertical stripe</b> across all
+              rows – all threads compute at the same time. If the computation takes less than 1 s, the stripe is only one column
+              wide and often not fully red, because a column shows the average of a whole second.</li>
+            <li><b>Few workers (e.g. 4):</b> only individual rows light up, but for longer. Windows decides which rows.
+              On the reference machine (Threadripper 3960X), 4 workers in tests usually ended up close together in <b>one</b> CCX (e.g. threads 24–27),
+              that is, <b>in pairs on both threads of the same core</b>, even though other cores were free. With the
+              “Placement” setting above you can control this deliberately and compare in the heatmap: “1 thread per core first” gives
+              single rows scattered across all CCXs, “compact” a dense block from the top.</li>
+            <li><b>Scaling test:</b> a <b>staircase</b>. First a long bar in a few rows (1 worker), then ever
+              shorter blocks across more and more rows. The red area (= computing work) stays roughly the same size;
+              it is just spread across more threads.</li>
+            <li><b>Load generator with affinity:</b> exactly the selected rows are red. “1st thread per core” gives a
+              zebra pattern (every other row). Without affinity the load wanders between rows, because Windows moves processes around.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What to watch for</h3>
+          <ul>
+            <li><b>Frayed end of a run:</b> some rows go dark earlier than others. That is
+              <b>load imbalance</b>: at the end only a few tiles are left, and the other workers have nothing more to do.
+              Tiles in the black set are especially demanding, because there the computation runs up to the maximum iteration count.</li>
+            <li><b>Both threads of a core red</b> means: two workers share one core. For Mandelbrot this matters
+              surprisingly little, measured only 5–8 % per worker. Each computation step waits for the result of the previous one,
+              so a single thread leaves the core waiting most of the time, and the second thread fills these gaps.
+              For other tasks (e.g. memory-heavy ones) this can look very different.</li>
+            <li><b>Single green dots at idle</b> are other programs (browser, Windows services) – the background noise.</li>
+            <li><b>Comparison with the core view above:</b> it shows the same measurement, but only the current value and
+              the last 60 s per thread; the heatmap shows all threads and the timeline at a glance.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <div class="two">
+    <section class="panel">
+      <h2><span data-l="de">Last erzeugen</span><span data-l="en">Generate load</span></h2>
+      <div class="form">
+        <label>Threads <b id="l-cores"><span data-l="de">alle</span><span data-l="en">all</span></b></label>
+        <label><span data-l="de">Intensität</span><span data-l="en">Intensity</span> <b id="l-int">100 %</b>
+          <input type="range" id="intensity" min="5" max="100" step="5" value="100"></label>
+        <label><span data-l="de">Dauer</span><span data-l="en">Duration</span>
+          <select id="seconds"><option>10</option><option selected>30</option><option>60</option><option>300</option></select> s</label>
+        <label class="check"><input type="checkbox" id="pin" checked> <span data-l="de">Prozesse fest an Threads binden (Affinität)</span><span data-l="en">Pin processes to fixed threads (affinity)</span></label>
+        <div class="buttons">
+          <button id="start" class="primary">Start</button>
+          <button id="stop"><span data-l="de">Stopp</span><span data-l="en">Stop</span></button>
+        </div>
+        <div id="load-status" class="muted small"><span data-l="de">keine Last aktiv</span><span data-l="en">no load active</span></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span data-l="de">Benchmark: Primzahlen seriell vs. parallel</span><span data-l="en">Benchmark: prime numbers, serial vs. parallel</span></h2>
+      <p class="muted small" data-l="de">Zählt Primzahlen bis N, einmal mit 1 Prozess, dann verteilt auf alle Kerne,
+        und misst den Beschleunigungsfaktor.</p>
+      <p class="muted small" data-l="en">Counts the prime numbers up to N, once with 1 process, then spread across all cores,
+        and measures the speedup.</p>
+      <div class="form">
+        <label>N
+          <select id="limit"><option value="1000000" data-en="1 million">1 Mio.</option><option value="3000000" selected data-en="3 million">3 Mio.</option><option value="10000000" data-en="10 million">10 Mio.</option></select></label>
+        <div class="buttons"><button id="bench" class="primary"><span data-l="de">Benchmark starten</span><span data-l="en">Start benchmark</span></button></div>
+        <div id="bench-out" class="muted small"><span data-l="de">noch nicht ausgeführt</span><span data-l="en">not run yet</span></div>
+      </div>
+    </section>
+  </div>
+  <!-- GLOSSAR-START: generated by tools/glossar.py – edit there, not here -->
+  <details class="panel system gloss" id="gloss-box">
+    <summary><b><span data-l="de">Begriffe kurz erklärt</span><span data-l="en">Glossary</span></b> · <span class="muted">71 <span data-l="de">Fachbegriffe, mit Links zum Weiterlesen</span><span data-l="en">technical terms, with links for further reading</span></span></summary>
+  <div data-l="de">
+    <div class="gloss-head">
+      <input type="search" class="gloss-filter" placeholder="Begriff suchen, z. B. SIMD oder Kardioide" autocomplete="off">
+      <nav class="gloss-nav"><a href="#g-0-0-0-0-de">0–9</a> <a href="#g-amdahlsches-gesetz-de">A</a> <a href="#g-base64-de">B</a> <a href="#g-c-c-de">C</a> <a href="#g-digitale-signatur-code-signatur-de">D</a> <a href="#g-embedded-python-de">E</a> <a href="#g-fastapi-uvicorn-de">F</a> <a href="#g-gil-global-interpreter-lock-de">G</a> <a href="#g-heatmap-de">H</a> <a href="#g-intrinsics-de">I</a> <a href="#g-jit-just-in-time-übersetzung-de">J</a> <a href="#g-kachel-de">K</a> <a href="#g-lastverteilung-dynamisch-de">L</a> <a href="#g-mandelbrot-menge-de">M</a> <a href="#g-numa-de">N</a> <a href="#g-openblas-de">O</a> <a href="#g-pip-de">P</a> <a href="#g-quarantäne-de">Q</a> <a href="#g-rust-de">R</a> <a href="#g-scheduler-de">S</a> <a href="#g-thread-hardware-thread-logischer-prozessor-de">T</a> <a href="#g-vcomp140-dll-openmp-de">V</a> <a href="#g-websocket-de">W</a> <a href="#g-x64-de">X</a></nav>
+    </div>
+    <dl class="gloss-list">
+      <dt id="g-0-0-0-0-de">0.0.0.0</dt><dd>Server-Einstellung „auf allen Netzwerkkarten erreichbar“. Der Monitor nutzt das bewusst nicht, sondern nur 127.0.0.1.</dd>
+      <dt id="g-127-0-0-1-localhost-de">127.0.0.1 (localhost)</dt><dd>Adresse des eigenen PCs. Der Server lauscht nur dort und ist deshalb von anderen Rechnern aus nicht erreichbar. <a href="https://de.wikipedia.org/wiki/Localhost" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-amdahlsches-gesetz-de">Amdahlsches Gesetz</dt><dd>Der nicht parallelisierbare Anteil eines Programms begrenzt die mögliche Beschleunigung, egal wie viele Kerne man einsetzt (siehe Pi). <a href="https://de.wikipedia.org/wiki/Amdahlsches_Gesetz" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-api-de">API</dt><dd>Schnittstelle, über die die Seite (oder ein Skript) den Server steuert, z. B. /api/mandel/start. <a href="https://de.wikipedia.org/wiki/Programmierschnittstelle" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-assembler-masm-de">Assembler (MASM)</dt><dd>Prozessorbefehle in lesbarer Form, von Hand geschrieben. MASM ist der Microsoft Macro Assembler. <a href="https://learn.microsoft.com/de-de/cpp/assembler/masm/microsoft-macro-assembler-reference" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-aufwendige-kacheln-zuerst-de">„Aufwendige Kacheln zuerst“</dt><dd>Reihenfolge, bei der eine grobe Vorab-Schätzung die rechenaufwendigsten Kacheln an den Anfang stellt, damit am Ende keine lange Kachel allein übrig bleibt.</dd>
+      <dt id="g-avx-512-de">AVX-512</dt><dd>Nachfolger von AVX2 mit 512-Bit-Registern (8 double gleichzeitig). Der Threadripper 3960X hat es nicht; neuere Prozessoren teils schon. <a href="https://de.wikipedia.org/wiki/AVX-512" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-avx2-de">AVX2</dt><dd>SIMD-Befehlssatz aktueller x86-Prozessoren; 256-Bit-Register fassen 4 Kommazahlen (double), also 4 Bildpunkte je Befehl. <a href="https://de.wikipedia.org/wiki/Advanced_Vector_Extensions" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-base64-de">base64</dt><dd>Verfahren, Binärdaten (hier Bildkacheln) als reinen Text zu verschicken; etwa ein Drittel größer als das Original. <a href="https://de.wikipedia.org/wiki/Base64" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-binary-splitting-de">Binary Splitting</dt><dd>Rechentrick, der die Reihenglieder paarweise zu großen Brüchen zusammenfasst; die Teilstücke lassen sich parallel berechnen, die letzte Division nicht. <a href="https://en.wikipedia.org/wiki/Binary_splitting" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-bitgenau-de">bitgenau</dt><dd>Jedes Byte des Ergebnisses ist identisch – hier: 0 Pixel Unterschied zwischen den Rechenverfahren.</dd>
+      <dt id="g-c-c-de">C / C++</dt><dd>Klassische, maschinennahe Sprachen. Hier mit dem Microsoft-Compiler (MSVC) aus Visual Studio übersetzt. <a href="https://learn.microsoft.com/de-de/cpp/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-c-net-de">C# / .NET</dt><dd>Programmiersprache und Laufzeitumgebung von Microsoft; echte Threads, Übersetzung in Maschinencode zur Laufzeit. <a href="https://learn.microsoft.com/de-de/dotnet/csharp/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-cache-l1-l2-l3-de">Cache (L1/L2/L3)</dt><dd>Schneller Zwischenspeicher im Prozessor. L1/L2 gehören je einem Kern, L3 teilen sich die Kerne eines CCX. <a href="https://de.wikipedia.org/wiki/Cache" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-ccx-core-complex-de">CCX (Core Complex)</dt><dd>Bei AMD-Zen-Prozessoren eine Gruppe von Kernen mit gemeinsamem L3-Cache; beim 3960X 8 CCX zu je 3 Kernen. Im Monitor „L3-Gruppe“. <a href="https://en.wikipedia.org/wiki/Zen_2" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-chudnovsky-formel-de">Chudnovsky-Formel</dt><dd>Sehr schnell konvergierende Reihe für Pi: etwa 14 neue Stellen je Glied. <a href="https://en.wikipedia.org/wiki/Chudnovsky_algorithm" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-compiler-schalter-o2-arch-avx2-fp-precise-mt-de">Compiler-Schalter /O2, /arch:AVX2, /fp:precise, /MT</dt><dd>Optimieren, AVX2-Befehle erlauben, Rechnung exakt wie geschrieben (kein FMA), Laufzeitbibliothek fest einbinden (keine Zusatz-DLLs nötig). <a href="https://learn.microsoft.com/de-de/cpp/build/reference/compiler-options-listed-by-category" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-cpu-affinität-platzierung-de">CPU-Affinität (Platzierung)</dt><dd>Festlegung, auf welchen Threads ein Prozess laufen darf. Damit testet der Monitor „1 Thread je Kern zuerst“ gegen „kompakt“. <a href="https://en.wikipedia.org/wiki/Processor_affinity" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-digitale-signatur-code-signatur-de">Digitale Signatur (Code-Signatur)</dt><dd>Elektronische Unterschrift eines Herstellers an einer .exe; signierte, verbreitete Programme lösen seltener Warnungen aus. Die Programme des Kern-Monitors sind nicht signiert. <a href="https://en.wikipedia.org/wiki/Code_signing" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-direct3d-11-compute-shader-hlsl-de">Direct3D 11 Compute-Shader / HLSL</dt><dd>Programm, das auf der Grafikkarte läuft; geschrieben in HLSL, gestartet über Direct3D 11 (funktioniert mit jeder aktuellen Grafikkarte unter Windows). <a href="https://learn.microsoft.com/de-de/windows/win32/direct3d11/direct3d-11-advanced-stages-compute-shader" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-double-float-de">double / float</dt><dd>Kommazahlen mit doppelter (≈ 16 Stellen) bzw. einfacher Genauigkeit (≈ 7 Stellen) nach IEEE 754. Spiele-Grafikkarten sind mit float viel schneller. <a href="https://de.wikipedia.org/wiki/IEEE_754" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-dxgi-de">DXGI</dt><dd>Windows-Schnittstelle, über die der Monitor die vorhandenen Grafikkarten und ihren Speicher erkennt. <a href="https://learn.microsoft.com/de-de/windows/win32/direct3ddxgi/dx-graphics-dxgi" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-embedded-python-de">Embedded Python</dt><dd>Offizielles, schlankes Python zum Mitgeben in einem Ordner, ohne Installation. Steckt im Paket „Komplett“. <a href="https://docs.python.org/3/using/windows.html#the-embeddable-package" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-fastapi-uvicorn-de">FastAPI / uvicorn</dt><dd>Python-Bausteine für den Webserver: FastAPI beschreibt die Schnittstellen, uvicorn liefert sie aus. <a href="https://fastapi.tiangolo.com/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-fehlalarm-false-positive-de">Fehlalarm (False Positive)</dt><dd>Ein Virenscanner hält ein harmloses Programm für gefährlich, weil es sich ähnlich verhält wie Schadsoftware (z. B. unsignierte .exe, volle Auslastung aller Kerne). Siehe „Hinweis zum Virenscanner“. <a href="https://de.wikipedia.org/wiki/Falsch_positiv" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-fma-fused-multiply-add-de">FMA (Fused Multiply-Add)</dt><dd>Multiplikation und Addition in einem Schritt mit nur einer Rundung. Schneller, verändert aber die letzte Stelle – und damit einzelne Bildpunkte. <a href="https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-gil-global-interpreter-lock-de">GIL (Global Interpreter Lock)</dt><dd>Sperre im Standard-Python: Nur ein Thread führt gleichzeitig Python-Code aus. Deshalb nutzt der Monitor für Python Prozesse statt Threads. <a href="https://docs.python.org/3/glossary.html#term-global-interpreter-lock" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-gmpy2-gmp-de">gmpy2 / GMP</dt><dd>Bibliothek für sehr große Zahlen mit beliebig vielen Stellen; Grundlage der Pi-Berechnung. <a href="https://gmpy2.readthedocs.io/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-gpu-grafikkarte-de">GPU (Grafikkarte)</dt><dd>Prozessor mit Tausenden einfacher Recheneinheiten; ideal, wenn sehr viele gleichartige Rechnungen anfallen (z. B. je Bildpunkt eine). <a href="https://de.wikipedia.org/wiki/Grafikprozessor" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-heatmap-de">Heatmap</dt><dd>Farbige Kachelansicht: je Thread ein Feld, Farbe = aktuelle Auslastung. <a href="https://de.wikipedia.org/wiki/Heatmap" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-intrinsics-de">Intrinsics</dt><dd>Funktionen in C/C++/Rust, die direkt einem Prozessorbefehl (z. B. AVX2) entsprechen; SIMD ohne Assembler. <a href="https://learn.microsoft.com/de-de/cpp/intrinsics/compiler-intrinsics" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-iterationen-max-iter-de">Iterationen (max_iter)</dt><dd>Wie oft z → z² + c höchstens wiederholt wird. Mehr Iterationen = feinere Ränder, aber mehr Rechenzeit (besonders im schwarzen Inneren).</dd>
+      <dt id="g-jit-just-in-time-übersetzung-de">JIT (Just-in-time-Übersetzung)</dt><dd>Code wird erst während des Programmlaufs in Maschinencode übersetzt; der erste Aufruf dauert daher länger. <a href="https://de.wikipedia.org/wiki/Just-in-time-Kompilierung" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-json-csv-de">JSON / CSV</dt><dd>Textformate für Messdaten: JSON für strukturierte Daten (eine Datei je Messung), CSV als Tabelle, die z. B. Excel öffnen kann. <a href="https://de.wikipedia.org/wiki/JavaScript_Object_Notation" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-kachel-de">Kachel</dt><dd>Rechteckiger Bildausschnitt (Standard 128 × 128 Pixel), die kleinste Arbeitseinheit eines Workers.</dd>
+      <dt id="g-kardioide-und-periode-2-kreis-de">Kardioide und Periode-2-Kreis</dt><dd>Die herzförmige Hauptfläche und der große Kreis links davon gehören sicher zur Mandelbrot-Menge. Eine kurze Formel erkennt diese Punkte, ohne sie bis zur Höchstzahl durchzurechnen. <a href="https://de.wikipedia.org/wiki/Kardioide" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-kern-prozessorkern-de">Kern (Prozessorkern)</dt><dd>Eigenständiges Rechenwerk im Prozessor. Der Threadripper 3960X hat 24 Kerne. <a href="https://de.wikipedia.org/wiki/Mehrkernprozessor" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-lastverteilung-dynamisch-de">Lastverteilung (dynamisch)</dt><dd>Wer mit seiner Kachel fertig ist, holt sich die nächste. So bleiben keine Kerne untätig, obwohl Kacheln unterschiedlich lange dauern. <a href="https://de.wikipedia.org/wiki/Lastverteilung_(Informatik)" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-mandelbrot-menge-de">Mandelbrot-Menge</dt><dd>Bekanntes Fraktal: Für jeden Bildpunkt wird z → z² + c wiederholt, bis der Wert „entkommt“ oder die Höchstzahl erreicht ist. Jeder Punkt ist unabhängig – ideal für Parallelisierung. <a href="https://de.wikipedia.org/wiki/Mandelbrot-Menge" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-median-de">Median</dt><dd>Mittlerer Wert einer sortierten Messreihe; unempfindlicher gegen Ausreißer als der Durchschnitt. Wird bei mehreren Läufen gewertet. <a href="https://de.wikipedia.org/wiki/Median" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-mpmath-de">mpmath</dt><dd>Python-Bibliothek für Rechnen mit beliebiger Genauigkeit; dient als unabhängige Gegenprobe für die Pi-Stellen. <a href="https://mpmath.org/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-numa-de">NUMA</dt><dd>Non-Uniform Memory Access: Bei großen Systemen ist Speicher je nach Kern unterschiedlich schnell erreichbar. Der 3960X hat einen NUMA-Knoten. <a href="https://de.wikipedia.org/wiki/Non-Uniform_Memory_Access" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-numba-de">numba</dt><dd>Übersetzt ausgewählte Python-Funktionen beim ersten Aufruf in Maschinencode (JIT) und macht sie so etwa so schnell wie C. <a href="https://numba.pydata.org/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-numpy-de">numpy</dt><dd>Python-Bibliothek für Rechnen mit ganzen Zahlenfeldern (Arrays). Schnell bei einfachen Feldoperationen, aber nicht ideal für Mandelbrot. <a href="https://numpy.org/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-openblas-de">OpenBLAS</dt><dd>Mathe-Bibliothek in numpy, die selbst Threads startet. Im Monitor auf 1 Thread je Prozess begrenzt, sonst braucht jeder Worker ~800 MB. <a href="https://www.openblas.net/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-pip-de">pip</dt><dd>Paketverwaltung von Python; installiert Erweiterungen wie numba oder FastAPI. <a href="https://pip.pypa.io/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-processpoolexecutor-de">ProcessPoolExecutor</dt><dd>Python-Baustein, der einen Vorrat an Worker-Prozessen verwaltet und Aufgaben an sie verteilt. <a href="https://docs.python.org/3/library/concurrent.futures.html" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-prozess-de">Prozess</dt><dd>Laufendes Programm mit eigenem Speicher. Mehrere Prozesse laufen unabhängig, tauschen Daten aber nur über Umwege aus. <a href="https://de.wikipedia.org/wiki/Prozess_(Informatik)" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-prozessorgruppe-de">Prozessorgruppe</dt><dd>Windows fasst höchstens 64 Threads zu einer Gruppe zusammen. Prozessoren mit mehr Threads haben mehrere Gruppen; ein Prozess läuft normalerweise nur in einer. <a href="https://learn.microsoft.com/de-de/windows/win32/procthread/processor-groups" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-psutil-de">psutil</dt><dd>Python-Bibliothek, die Auslastung, Speicher und Prozesse abfragt; liefert die Werte für die Kern-Anzeige. <a href="https://psutil.readthedocs.io/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-python-de">Python</dt><dd>Verbreitete Skriptsprache; hier für Webserver, Steuerung und zwei Rechenverfahren. <a href="https://www.python.org/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-quarantäne-de">Quarantäne</dt><dd>Abgeschotteter Bereich des Virenscanners für verdächtige Dateien; von dort lassen sie sich wiederherstellen. <a href="https://de.wikipedia.org/wiki/Antivirenprogramm" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-rust-de">Rust</dt><dd>Moderne Systemsprache mit C-ähnlicher Geschwindigkeit; der Übersetzer verhindert typische Fehler beim Arbeiten mit Threads. <a href="https://www.rust-lang.org/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-rustup-cargo-de">rustup / cargo</dt><dd>rustup installiert und aktualisiert Rust; cargo übersetzt Rust-Programme und lädt benötigte Bibliotheken. <a href="https://rustup.rs/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-scheduler-de">Scheduler</dt><dd>Teil von Windows, der entscheidet, welcher Thread wann auf welchem Kern läuft (Platzierung „Windows entscheidet“). <a href="https://de.wikipedia.org/wiki/Prozess-Scheduler" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-seepferdchental-de">Seepferdchental</dt><dd>Bekannter Ausschnitt der Mandelbrot-Menge zwischen Hauptfläche und Periode-2-Kreis; sehr fein verästelt und daher rechenaufwendig. <a href="https://de.wikipedia.org/wiki/Mandelbrot-Menge" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-self-contained-single-file-de">Self-contained Single-File</dt><dd>.NET-Programm, das die Laufzeitumgebung in einer einzigen .exe mitbringt; läuft ohne installiertes .NET. <a href="https://learn.microsoft.com/de-de/dotnet/core/deploying/single-file/overview" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-simd-de">SIMD</dt><dd>Single Instruction, Multiple Data: Ein Befehl rechnet mehrere Zahlen gleichzeitig. <a href="https://de.wikipedia.org/wiki/SIMD" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-skalierung-beschleunigung-effizienz-de">Skalierung, Beschleunigung, Effizienz</dt><dd>Beschleunigung = Zeit mit 1 Worker ÷ Zeit mit n Workern. Effizienz = Beschleunigung ÷ n (100 % = perfekt). <a href="https://de.wikipedia.org/wiki/Speedup" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-smartscreen-de">SmartScreen</dt><dd>Windows-Schutz, der vor unbekannten, nicht signierten Programmen warnt („Der Computer wurde durch Windows geschützt“). <a href="https://learn.microsoft.com/de-de/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-smt-simultaneous-multithreading-bei-intel-hyper-threading-de">SMT (Simultaneous Multithreading, bei Intel „Hyper-Threading“)</dt><dd>Ein Kern bearbeitet zwei Befehlsströme gleichzeitig und füllt damit Lücken in seinen Rechenwerken. Bringt meist 0–30 %, nicht 100 %. <a href="https://de.wikipedia.org/wiki/Simultaneous_Multithreading" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-thread-hardware-thread-logischer-prozessor-de">Thread (Hardware-Thread, logischer Prozessor)</dt><dd>Was Windows als „CPU“ zählt. Mit SMT bietet jeder Kern 2 Threads, also 48 beim 3960X. <a href="https://de.wikipedia.org/wiki/Thread_(Informatik)" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-thread-software-de">Thread (Software)</dt><dd>Ausführungsstrang innerhalb eines Prozesses; alle Threads teilen sich den Speicher und starten viel schneller als Prozesse. <a href="https://de.wikipedia.org/wiki/Thread_(Informatik)" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-vcomp140-dll-openmp-de">vcomp140.dll / OpenMP</dt><dd>OpenMP ist ein Standard, mit dem C/C++-Programme Schleifen auf Threads verteilen; vcomp140.dll ist Microsofts Laufzeitbibliothek dafür und liegt dem Paket bei. <a href="https://learn.microsoft.com/de-de/cpp/parallel/openmp/openmp-in-visual-cpp" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-vector256-de">Vector256</dt><dd>.NET-Datentyp für ein 256-Bit-Register (4 double); damit nutzt C# AVX2. <a href="https://learn.microsoft.com/de-de/dotnet/api/system.runtime.intrinsics.vector256" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-virustotal-de">VirusTotal</dt><dd>Kostenloser Dienst, der eine Datei mit rund 70 Virenscannern gleichzeitig prüft. <a href="https://www.virustotal.com/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-visual-studio-build-tools-de">Visual Studio Build Tools</dt><dd>Microsofts Compiler für C, C++ und Assembler ohne die volle Entwicklungsumgebung; kostenlos. <a href="https://visualstudio.microsoft.com/de/downloads/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-websocket-de">WebSocket</dt><dd>Dauerhafte Verbindung zwischen Browser und Server; darüber kommen die Auslastungswerte jede Sekunde ohne Neuladen. <a href="https://de.wikipedia.org/wiki/WebSocket" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-winget-de">winget</dt><dd>Paketverwaltung von Windows; installiert Programme wie Python, .NET oder Rust per Befehlszeile. <a href="https://learn.microsoft.com/de-de/windows/package-manager/winget/" target="_blank" rel="noopener">mehr ↗</a></dd>
+      <dt id="g-worker-de">Worker</dt><dd>Ein Prozess oder Thread, der Kacheln abarbeitet. Die Worker-Zahl stellt man im Monitor ein (1–48).</dd>
+      <dt id="g-x64-de">x64</dt><dd>64-Bit-Befehlssatz der heutigen Intel- und AMD-Prozessoren (auch x86-64 oder AMD64). <a href="https://de.wikipedia.org/wiki/X64" target="_blank" rel="noopener">mehr ↗</a></dd>
+    </dl>
+    <div class="gloss-none muted small" hidden>Kein Begriff gefunden.</div>
+  </div>
+  <div data-l="en">
+    <div class="gloss-head">
+      <input type="search" class="gloss-filter" placeholder="Search a term, e.g. SIMD or cardioid" autocomplete="off">
+      <nav class="gloss-nav"><a href="#g-0-0-0-0-en">0–9</a> <a href="#g-amdahl-s-law-en">A</a> <a href="#g-base64-en">B</a> <a href="#g-c-c-en">C</a> <a href="#g-demanding-tiles-first-en">D</a> <a href="#g-embedded-python-en">E</a> <a href="#g-false-positive-en">F</a> <a href="#g-gil-global-interpreter-lock-en">G</a> <a href="#g-heat-map-en">H</a> <a href="#g-intrinsics-en">I</a> <a href="#g-jit-just-in-time-compilation-en">J</a> <a href="#g-load-balancing-dynamic-en">L</a> <a href="#g-mandelbrot-set-en">M</a> <a href="#g-numa-en">N</a> <a href="#g-openblas-en">O</a> <a href="#g-pip-en">P</a> <a href="#g-quarantine-en">Q</a> <a href="#g-rust-en">R</a> <a href="#g-scaling-speedup-efficiency-en">S</a> <a href="#g-thread-hardware-thread-logical-processor-en">T</a> <a href="#g-vcomp140-dll-openmp-en">V</a> <a href="#g-websocket-en">W</a> <a href="#g-x64-en">X</a></nav>
+    </div>
+    <dl class="gloss-list">
+      <dt id="g-0-0-0-0-en">0.0.0.0</dt><dd>Server setting &quot;reachable on all network adapters&quot;. The monitor deliberately does not use it, only 127.0.0.1.</dd>
+      <dt id="g-127-0-0-1-localhost-en">127.0.0.1 (localhost)</dt><dd>Address of your own PC. The server listens only there and is therefore not reachable from other computers. <a href="https://en.wikipedia.org/wiki/Localhost" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-amdahl-s-law-en">Amdahl&#x27;s law</dt><dd>The part of a program that cannot run in parallel limits the possible speedup, no matter how many cores are used (see Pi). <a href="https://en.wikipedia.org/wiki/Amdahl%27s_law" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-api-en">API</dt><dd>Interface through which the page (or a script) controls the server, e.g. /api/mandel/start. <a href="https://en.wikipedia.org/wiki/API" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-assembler-masm-en">Assembler (MASM)</dt><dd>Processor instructions in readable form, written by hand. MASM is the Microsoft Macro Assembler. <a href="https://learn.microsoft.com/en-us/cpp/assembler/masm/microsoft-macro-assembler-reference" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-avx-512-en">AVX-512</dt><dd>Successor of AVX2 with 512-bit registers (8 doubles at once). The Threadripper 3960X does not have it; some newer processors do. <a href="https://en.wikipedia.org/wiki/AVX-512" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-avx2-en">AVX2</dt><dd>SIMD instruction set of current x86 processors; 256-bit registers hold 4 floating-point numbers (double), i.e. 4 pixels per instruction. <a href="https://en.wikipedia.org/wiki/Advanced_Vector_Extensions" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-base64-en">base64</dt><dd>Method to send binary data (here image tiles) as plain text; about one third larger than the original. <a href="https://en.wikipedia.org/wiki/Base64" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-binary-splitting-en">Binary splitting</dt><dd>Technique that combines the series terms pairwise into large fractions; the parts can be computed in parallel, the final division cannot. <a href="https://en.wikipedia.org/wiki/Binary_splitting" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-bit-identical-en">Bit-identical</dt><dd>Every byte of the result is identical – here: 0 pixels difference between the computation methods.</dd>
+      <dt id="g-c-c-en">C / C++</dt><dd>Classic languages close to the hardware. Compiled here with the Microsoft compiler (MSVC) from Visual Studio. <a href="https://learn.microsoft.com/en-us/cpp/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-c-net-en">C# / .NET</dt><dd>Programming language and runtime from Microsoft; real threads, compiled to machine code at run time. <a href="https://learn.microsoft.com/en-us/dotnet/csharp/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-cache-l1-l2-l3-en">Cache (L1/L2/L3)</dt><dd>Fast buffer memory inside the processor. L1/L2 belong to one core, L3 is shared by the cores of a CCX. <a href="https://en.wikipedia.org/wiki/CPU_cache" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-cardioid-and-period-2-bulb-en">Cardioid and period-2 bulb</dt><dd>The heart-shaped main area and the large disc to its left certainly belong to the Mandelbrot set. A short formula detects these points without iterating them up to the maximum. <a href="https://en.wikipedia.org/wiki/Mandelbrot_set#Main_cardioid_and_period_bulbs" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-ccx-core-complex-en">CCX (Core Complex)</dt><dd>On AMD Zen processors a group of cores sharing one L3 cache; the 3960X has 8 CCXs with 3 cores each. Called &quot;L3 group&quot; in the monitor. <a href="https://en.wikipedia.org/wiki/Zen_2" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-chudnovsky-formula-en">Chudnovsky formula</dt><dd>Very fast converging series for Pi: about 14 new digits per term. <a href="https://en.wikipedia.org/wiki/Chudnovsky_algorithm" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-compiler-switches-o2-arch-avx2-fp-precise-mt-en">Compiler switches /O2, /arch:AVX2, /fp:precise, /MT</dt><dd>Optimise, allow AVX2 instructions, compute exactly as written (no FMA), link the runtime library statically (no extra DLLs needed). <a href="https://learn.microsoft.com/en-us/cpp/build/reference/compiler-options-listed-by-category" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-core-processor-core-en">Core (processor core)</dt><dd>Independent execution unit inside the processor. The Threadripper 3960X has 24 cores. <a href="https://en.wikipedia.org/wiki/Multi-core_processor" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-cpu-affinity-placement-en">CPU affinity (placement)</dt><dd>Defines on which threads a process may run. The monitor uses it to compare &quot;1 thread per core first&quot; with &quot;compact&quot;. <a href="https://en.wikipedia.org/wiki/Processor_affinity" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-demanding-tiles-first-en">&quot;Demanding tiles first&quot;</dt><dd>Order in which a rough up-front estimate puts the most compute-intensive tiles first, so that no long tile is left running alone at the end.</dd>
+      <dt id="g-digital-signature-code-signing-en">Digital signature (code signing)</dt><dd>Electronic signature of a publisher on an .exe; signed, widely used programs trigger warnings less often. The programs of Core Monitor are not signed. <a href="https://en.wikipedia.org/wiki/Code_signing" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-direct3d-11-compute-shader-hlsl-en">Direct3D 11 compute shader / HLSL</dt><dd>Program that runs on the graphics card; written in HLSL, launched via Direct3D 11 (works with any current graphics card on Windows). <a href="https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-compute-shader" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-double-float-en">double / float</dt><dd>Floating-point numbers with double (≈ 16 digits) or single precision (≈ 7 digits) according to IEEE 754. Gaming graphics cards are much faster with float. <a href="https://en.wikipedia.org/wiki/IEEE_754" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-dxgi-en">DXGI</dt><dd>Windows interface the monitor uses to detect the installed graphics cards and their memory. <a href="https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dx-graphics-dxgi" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-embedded-python-en">Embedded Python</dt><dd>Official, lean Python distribution that can be shipped in a folder without installation. Included in the &quot;Full&quot; package. <a href="https://docs.python.org/3/using/windows.html#the-embeddable-package" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-false-positive-en">False positive</dt><dd>Antivirus software considers a harmless program dangerous because it behaves similarly to malware (e.g. unsigned .exe, full load on all cores). See &quot;Note on antivirus software&quot;. <a href="https://en.wikipedia.org/wiki/False_positives_and_false_negatives" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-fastapi-uvicorn-en">FastAPI / uvicorn</dt><dd>Python building blocks of the web server: FastAPI describes the interfaces, uvicorn serves them. <a href="https://fastapi.tiangolo.com/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-fma-fused-multiply-add-en">FMA (fused multiply-add)</dt><dd>Multiplication and addition in one step with a single rounding. Faster, but changes the last digit – and thus individual pixels. <a href="https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-gil-global-interpreter-lock-en">GIL (Global Interpreter Lock)</dt><dd>Lock in standard Python: only one thread executes Python code at a time. That is why the monitor uses processes instead of threads for Python. <a href="https://docs.python.org/3/glossary.html#term-global-interpreter-lock" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-gmpy2-gmp-en">gmpy2 / GMP</dt><dd>Library for very large numbers with any number of digits; the basis of the Pi computation. <a href="https://gmpy2.readthedocs.io/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-gpu-graphics-card-en">GPU (graphics card)</dt><dd>Processor with thousands of simple execution units; ideal when a huge number of identical calculations is needed (e.g. one per pixel). <a href="https://en.wikipedia.org/wiki/Graphics_processing_unit" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-heat-map-en">Heat map</dt><dd>Coloured tile view: one field per thread, colour = current load. <a href="https://en.wikipedia.org/wiki/Heat_map" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-intrinsics-en">Intrinsics</dt><dd>Functions in C/C++/Rust that map directly to one processor instruction (e.g. AVX2); SIMD without assembler. <a href="https://learn.microsoft.com/en-us/cpp/intrinsics/compiler-intrinsics" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-iterations-max-iter-en">Iterations (max_iter)</dt><dd>The maximum number of times z → z² + c is repeated. More iterations = finer edges, but more computing time (especially in the black interior).</dd>
+      <dt id="g-jit-just-in-time-compilation-en">JIT (just-in-time compilation)</dt><dd>Code is compiled to machine code only while the program runs; the first call therefore takes longer. <a href="https://en.wikipedia.org/wiki/Just-in-time_compilation" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-json-csv-en">JSON / CSV</dt><dd>Text formats for measurements: JSON for structured data (one file per measurement), CSV as a table that e.g. Excel can open. <a href="https://en.wikipedia.org/wiki/JSON" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-load-balancing-dynamic-en">Load balancing (dynamic)</dt><dd>Whoever finishes a tile fetches the next one. No core sits idle even though tiles take different amounts of time. <a href="https://en.wikipedia.org/wiki/Load_balancing_(computing)" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-mandelbrot-set-en">Mandelbrot set</dt><dd>Famous fractal: for every pixel z → z² + c is repeated until the value &quot;escapes&quot; or the maximum count is reached. Every point is independent – ideal for parallelisation. <a href="https://en.wikipedia.org/wiki/Mandelbrot_set" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-median-en">Median</dt><dd>Middle value of a sorted series of measurements; less sensitive to outliers than the average. Used when several runs are made. <a href="https://en.wikipedia.org/wiki/Median" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-mpmath-en">mpmath</dt><dd>Python library for arbitrary-precision arithmetic; serves as an independent cross-check of the Pi digits. <a href="https://mpmath.org/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-numa-en">NUMA</dt><dd>Non-Uniform Memory Access: on large systems memory is reached at different speeds depending on the core. The 3960X has one NUMA node. <a href="https://en.wikipedia.org/wiki/Non-uniform_memory_access" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-numba-en">numba</dt><dd>Compiles selected Python functions to machine code on first call (JIT), making them about as fast as C. <a href="https://numba.pydata.org/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-numpy-en">numpy</dt><dd>Python library for computing with whole arrays of numbers. Fast for simple array operations, but not ideal for Mandelbrot. <a href="https://numpy.org/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-openblas-en">OpenBLAS</dt><dd>Math library inside numpy that starts its own threads. Limited to 1 thread per process in the monitor, otherwise every worker needs ~800 MB. <a href="https://www.openblas.net/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-pip-en">pip</dt><dd>Python&#x27;s package manager; installs extensions such as numba or FastAPI. <a href="https://pip.pypa.io/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-process-en">Process</dt><dd>A running program with its own memory. Processes run independently but can exchange data only indirectly. <a href="https://en.wikipedia.org/wiki/Process_(computing)" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-processor-group-en">Processor group</dt><dd>Windows combines at most 64 threads into one group. Processors with more threads have several groups; a process normally runs in only one. <a href="https://learn.microsoft.com/en-us/windows/win32/procthread/processor-groups" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-processpoolexecutor-en">ProcessPoolExecutor</dt><dd>Python building block that manages a pool of worker processes and distributes tasks to them. <a href="https://docs.python.org/3/library/concurrent.futures.html" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-psutil-en">psutil</dt><dd>Python library that queries load, memory and processes; supplies the values for the core display. <a href="https://psutil.readthedocs.io/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-python-en">Python</dt><dd>Widely used scripting language; used here for the web server, control logic and two computation methods. <a href="https://www.python.org/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-quarantine-en">Quarantine</dt><dd>Isolated area of the antivirus software for suspicious files; they can be restored from there. <a href="https://en.wikipedia.org/wiki/Antivirus_software" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-rust-en">Rust</dt><dd>Modern systems language with C-like speed; its compiler prevents typical mistakes when working with threads. <a href="https://www.rust-lang.org/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-rustup-cargo-en">rustup / cargo</dt><dd>rustup installs and updates Rust; cargo builds Rust programs and downloads the libraries they need. <a href="https://rustup.rs/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-scaling-speedup-efficiency-en">Scaling, speedup, efficiency</dt><dd>Speedup = time with 1 worker ÷ time with n workers. Efficiency = speedup ÷ n (100 % = perfect). <a href="https://en.wikipedia.org/wiki/Speedup" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-scheduler-en">Scheduler</dt><dd>Part of Windows that decides which thread runs on which core and when (placement &quot;Windows decides&quot;). <a href="https://en.wikipedia.org/wiki/Scheduling_(computing)" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-seahorse-valley-en">Seahorse valley</dt><dd>Well-known region of the Mandelbrot set between the main cardioid and the period-2 bulb; very finely branched and therefore compute-intensive. <a href="https://en.wikipedia.org/wiki/Mandelbrot_set" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-self-contained-single-file-en">Self-contained single file</dt><dd>.NET program that carries the runtime inside a single .exe; runs without an installed .NET. <a href="https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-simd-en">SIMD</dt><dd>Single Instruction, Multiple Data: one instruction processes several numbers at once. <a href="https://en.wikipedia.org/wiki/Single_instruction,_multiple_data" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-smartscreen-en">SmartScreen</dt><dd>Windows protection that warns about unknown, unsigned programs (&quot;Windows protected your PC&quot;). <a href="https://learn.microsoft.com/en-us/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-smt-simultaneous-multithreading-intel-hyper-threading-en">SMT (simultaneous multithreading, Intel: &quot;Hyper-Threading&quot;)</dt><dd>One core runs two instruction streams at once and fills gaps in its execution units. Usually gains 0–30 %, not 100 %. <a href="https://en.wikipedia.org/wiki/Simultaneous_multithreading" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-thread-hardware-thread-logical-processor-en">Thread (hardware thread, logical processor)</dt><dd>What Windows counts as a &quot;CPU&quot;. With SMT every core offers 2 threads, i.e. 48 on the 3960X. <a href="https://en.wikipedia.org/wiki/Thread_(computing)" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-thread-software-en">Thread (software)</dt><dd>Execution path inside a process; all threads share the memory and start much faster than processes. <a href="https://en.wikipedia.org/wiki/Thread_(computing)" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-tile-en">Tile</dt><dd>Rectangular part of the image (default 128 × 128 pixels), the smallest unit of work for a worker.</dd>
+      <dt id="g-vcomp140-dll-openmp-en">vcomp140.dll / OpenMP</dt><dd>OpenMP is a standard that lets C/C++ programs distribute loops across threads; vcomp140.dll is Microsoft&#x27;s runtime library for it and is included in the package. <a href="https://learn.microsoft.com/en-us/cpp/parallel/openmp/openmp-in-visual-cpp" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-vector256-en">Vector256</dt><dd>.NET data type for a 256-bit register (4 doubles); this is how C# uses AVX2. <a href="https://learn.microsoft.com/en-us/dotnet/api/system.runtime.intrinsics.vector256" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-virustotal-en">VirusTotal</dt><dd>Free service that checks a file with about 70 antivirus engines at once. <a href="https://www.virustotal.com/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-visual-studio-build-tools-en">Visual Studio Build Tools</dt><dd>Microsoft&#x27;s compilers for C, C++ and assembler without the full development environment; free of charge. <a href="https://visualstudio.microsoft.com/downloads/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-websocket-en">WebSocket</dt><dd>Permanent connection between browser and server; the load values arrive through it every second without reloading. <a href="https://en.wikipedia.org/wiki/WebSocket" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-winget-en">winget</dt><dd>Windows package manager; installs programs such as Python, .NET or Rust from the command line. <a href="https://learn.microsoft.com/en-us/windows/package-manager/winget/" target="_blank" rel="noopener">more ↗</a></dd>
+      <dt id="g-worker-en">Worker</dt><dd>A process or thread that works through tiles. The number of workers is set in the monitor (1–48).</dd>
+      <dt id="g-x64-en">x64</dt><dd>64-bit instruction set of today&#x27;s Intel and AMD processors (also called x86-64 or AMD64). <a href="https://en.wikipedia.org/wiki/X86-64" target="_blank" rel="noopener">more ↗</a></dd>
+    </dl>
+    <div class="gloss-none muted small" hidden>No term found.</div>
+  </div>
+  </details>
+  <!-- GLOSSAR-ENDE -->
+</main>
+<div id="tip" class="tip"></div>
+<script src="/static/app.js"></script>
+<script src="/static/mandel.js"></script>
+<script src="/static/pi.js"></script>
+</body>
+</html>

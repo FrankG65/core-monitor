@@ -1,0 +1,96 @@
+CORE MONITOR – "Lite" package
+=============================
+
+This package contains only the source code (no ready-made programs, no Python). That keeps it small and clear, and
+everything is built fresh from source on the target PC. You only need what you want to use:
+
+  What                        Needed for                                    Without it ...
+  --------------------------  --------------------------------------------  ----------------------------------------------
+  1. Python 3.11 or newer     EVERYTHING (server, page, Python methods)     nothing runs
+  2. Internet (once)          Python packages via pip                       start.bat stops with a hint
+  3. .NET SDK 10              computation methods "C#" and "C# SIMD"        these two are greyed out
+  4. Rust (rustup)            computation methods "Rust" and "Rust SIMD"    these two are greyed out
+  5. Visual Studio C++        C, C++, assembler, GPU                        these are greyed out
+  6. Graphics card driver     GPU computation methods                       greyed out
+
+The SIMD computation methods and assembler need a CPU with AVX2 (almost all since about 2015); otherwise they are greyed out.
+The page detects the CPU and graphics card at start-up and shows under "System" what is available and, if not, why.
+
+STEP BY STEP
+------------
+1) Install Python (required)
+   - https://www.python.org/downloads/windows/  -> "Windows installer (64-bit)", version 3.11 or newer.
+   - In the installer, be sure to tick "Add python.exe to PATH".
+   - or in a command prompt:  winget install Python.Python.3.11
+   Check:  python --version          (must report 3.11 or higher)
+   start.bat installs the packages (requirements.txt: fastapi, uvicorn, psutil, numpy, gmpy2, mpmath; plus numba,
+   optional) by itself on the first start. By hand:  python -m pip install -r requirements.txt numba
+
+2) .NET SDK 10 (optional, for C#)
+   - https://dotnet.microsoft.com/download   -> ".NET 10 SDK", x64
+   - or:  winget install Microsoft.DotNet.SDK.10
+   Check:  dotnet --version          (10.x)
+
+3) Rust (optional, for Rust)
+   - https://rustup.rs  -> run rustup-init.exe, accept the default settings
+   - or:  winget install Rustlang.Rustup
+   On Windows, Rust needs the linker from step 4 (Visual Studio C++).
+   Check:  cargo --version
+
+4) Visual Studio with C++ (optional, for C, C++, assembler and GPU; also needed for Rust)
+   - "Build Tools for Visual Studio" (free) or Visual Studio Community:
+     https://visualstudio.microsoft.com/downloads/
+   - In the installer, select the workload "Desktop development with C++"
+     (contains the compiler cl, the assembler ml64, and the Windows SDK with the shader compiler fxc).
+   - or:  winget install Microsoft.VisualStudio.2022.BuildTools --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive"
+   Check: run native\build.bat -> "C, C++, assembler and GPU compiled."
+
+5) Graphics card (optional, for GPU)
+   - install the current driver from NVIDIA, AMD or Intel. Direct3D 11 is required (all cards since about 2010).
+
+STARTING
+--------
+1. Extract the ZIP, e.g. to C:\CoreMonitor.
+2. Double-click start.bat. On the first start, the Python packages are installed and – as far as the tools from
+   steps 3–5 are available – C#, Rust, C, C++, assembler and GPU are compiled (1–3 minutes).
+3. The browser opens http://127.0.0.1:8000. The server can only be reached from this PC.
+To quit: close the black window. Different port: beforehand  set PORT=8001
+
+PROBLEMS?
+---------
+- "Python was not found": repeat step 1, ticking "Add to PATH"; open a new command prompt.
+- A computation method is greyed out: expand "System" at the top of the page – the reason is shown there.
+- No internet: on a PC with internet, build the "Full" package (export_full.bat,
+  produces export\CoreMonitor_Full_<date>.zip) and use that instead.
+- Language: switch DE | EN at the top of the page (default = browser language).
+  Server start language: beforehand  set KM_LANG=en  or  set KM_LANG=de
+- Description and project report are included in both languages: README.md / README.de.md,
+  Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).
+- Technical terms (numba, SIMD, CCX, cardioid ...) are explained in README.md in the "Glossary" section, with links.
+
+ANTIVIRUS SOFTWARE (important, but no cause for concern)
+--------------------------------------------------------
+Antivirus software (e.g. Microsoft Defender, Trend Micro) and Windows SmartScreen may raise an alarm about this
+program or block parts of it – this is a false positive and unfounded. These programs judge by behaviour patterns,
+and Core Monitor has several that malware shows too:
+  - self-compiled .exe files without a digital signature and without a "reputation" (C#, Rust, C, C++, assembler, GPU),
+  - freshly extracted, unknown files from a ZIP (from the internet, by e-mail or on a USB stick),
+  - many processes started at once (up to 48 Python workers) and 100 % load on all cores
+    (similar to a crypto miner).
+Possible symptoms:
+  - "Access is denied" on the first start of a computation method, or a slow first start,
+  - an .exe is moved to quarantine or deleted -> the computation method appears greyed out
+    with the hint "Program missing – probably removed by antivirus software ...",
+  - the warning "Windows protected your PC" (SmartScreen).
+What to do:
+  1. Wait a few seconds or restart start.bat – the monitor itself retries a blocked start
+     for up to 10 seconds; by then the scan has usually finished.
+  2. Before extracting: right-click the ZIP file -> Properties -> tick "Unblock" -> OK.
+     With SmartScreen: "More info" -> "Run anyway".
+  3. Check the antivirus quarantine and restore the file.
+  4. Add the Core Monitor folder as an exclusion in your antivirus software – ONLY if the package comes from
+     a trustworthy source (built yourself or obtained directly from the author).
+  5. If you want to be sure: have individual .exe files scanned at https://www.virustotal.com,
+     or use the "Lite" package and compile everything yourself from the included source code.
+Please do NOT turn off your antivirus software. The Python computation methods (numba, numpy) and Pi still work
+even if all .exe files are blocked.

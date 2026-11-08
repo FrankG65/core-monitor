@@ -1,0 +1,7 @@
+# Normalise text files; Windows scripts keep CRLF line endings (cmd.exe can misread LF-only batch files)
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.pdf binary
+*.png binary
