@@ -21,12 +21,34 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 BENCH = ROOT / "benchmarks"
 failures: list[str] = []
+results: list[tuple[str, bool, str]] = []   # (section, ok, text) for the summary
+notes: list[str] = []
+_section = ""
+
+
+def section(name: str):
+    global _section
+    _section = name
+    print("\n" + name, flush=True)
 
 
 def check(ok: bool, text: str):
     print(("  OK    " if ok else "  FAIL  ") + text, flush=True)
+    results.append((_section, ok, text))
     if not ok:
         failures.append(text)
+
+
+def write_summary():
+    """Markdown summary for the run page (GitHub Actions sets GITHUB_STEP_SUMMARY)."""
+    target = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not target:
+        return
+    lines = ["## Core Monitor self-test: " + ("all checks passed ✅" if not failures else f"{len(failures)} check(s) failed ❌"), ""]
+    lines += [f"- {n}" for n in notes] + ["", "| Section | Check | Result |", "|---|---|---|"]
+    lines += [f"| {s} | {txt.replace('|', '/')} | {'✅' if ok else '❌'} |" for s, ok, txt in results]
+    with open(target, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def free_port() -> int:
@@ -131,29 +153,30 @@ def main():
     try:
         info = srv.info
         cpu = info["system"]["cpu"]
-        print(f"System: {cpu['name']} – {cpu['physical']} cores / {cpu['logical']} threads, AVX2={cpu['isa']['avx2']}")
-        print(f"Available: {', '.join(info['engines'])}")
-        for e, why in info["engines_off"].items():
-            print(f"Greyed out: {e} – {why}")
+        notes.append(f"System: {cpu['name']} – {cpu['physical']} cores / {cpu['logical']} threads, AVX2={cpu['isa']['avx2']}")
+        notes.append(f"Available ({len(info['engines'])}): {', '.join(info['engines'])}")
+        notes.extend(f"Greyed out: {e} – {why}" for e, why in info["engines_off"].items())
+        print("\n".join(notes))
 
-        print("\nLanguage")
+        section("Language")
         check(info.get("lang") == "en", "server starts in English (KM_LANG=en)")
         de = srv.post("/api/lang", {"lang": "de"})
         check(de.get("lang") == "de" and "zeilenweise" in json.dumps(srv.get("/api/info"), ensure_ascii=False), "switch to German")
         srv.post("/api/lang", {"lang": "en"})
         check("row by row" in json.dumps(srv.get("/api/info")), "switch back to English")
 
-        print("\nAvailability")
+        section("Availability")
         required = [e for e in args.require.split(",") if e]
         if not cpu["isa"]["avx2"]:
             required = [e for e in required if not (e.endswith("_simd") or e == "asm")]
+            notes.append("CPU without AVX2: SIMD and assembler methods are not required")
         for e in required:
             check(e in info["engines"], f"{e} available")
         for e in ("gpu", "gpu_float"):
             if e not in info["engines"]:
                 check(bool(info["engines_off"].get(e)), f"{e} not available here, greyed out with a reason")
 
-        print("\nMandelbrot (400 x 640, 1,000 iterations)")
+        section("Mandelbrot (400 x 640, 1,000 iterations)")
         ref = None
         for e in info["engines"]:
             s, h = image(srv, e)
@@ -166,13 +189,13 @@ def main():
                   + ("bit-identical to numba" if same else "differs slightly (GPU, expected)" if gpu else "DIFFERS from numba")
                   + (f" – {s['error']}" if s.get("error") else ""))
 
-        print("\nScaling test (1 and 2 workers)")
+        section("Scaling test (1 and 2 workers)")
         srv.post("/api/mandel/bench", {"width": 400, "height": 640, "maxiter": 500, "engine": info["engines"][0],
                                        "worker_list": [1, 2], "repeats": 1})
         b = srv.wait("/api/mandel/status", bench=True)["bench"]
         check(not b.get("error") and [r["workers"] for r in b["results"]] == [1, 2], f"results {[(r['workers'], r['seconds']) for r in b['results']]}")
 
-        print("\nPi (10,000 digits)")
+        section("Pi (10,000 digits)")
         srv.post("/api/pi/start", {"digits": 10000, "workers": min(4, info["logical"])})
         s = srv.wait("/api/pi/status")
         check(bool((s.get("check") or {}).get("ok")) and not s.get("error"), (s.get("check") or {}).get("info") or str(s.get("error")))
@@ -186,9 +209,10 @@ def main():
             for p, data in saved.items():
                 p.write_bytes(data)
 
-    print("\nPrivacy")
+    section("Privacy")
     privacy()
 
+    write_summary()
     print("\n" + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} CHECK(S) FAILED:\n  - " + "\n  - ".join(failures)))
     sys.exit(1 if failures else 0)
 
