@@ -48,9 +48,10 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           $zip = Get-ChildItem export -Filter "CoreMonitor_Full_*.zip" | Select-Object -First 1
+          $sha = "$($zip.FullName).sha256"
           gh release view $env:TAG *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:TAG $zip.FullName --clobber
+            gh release upload $env:TAG $zip.FullName $sha --clobber
           } else {
-            gh release create $env:TAG $zip.FullName --target main --title "Core Monitor $($env:TAG.TrimStart('v'))" --notes-file docs/release_notes.md
+            gh release create $env:TAG $zip.FullName $sha --target main --title "Core Monitor $($env:TAG.TrimStart('v'))" --notes-file docs/release_notes.md
           }

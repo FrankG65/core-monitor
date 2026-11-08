@@ -32,14 +32,14 @@ if (Test-Path $work) { Remove-Item $work -Recurse -Force }
 New-Item -ItemType Directory -Force $work | Out-Null
 
 # ---- Source code (both variants) ----
-$files = @("server.py", "app.py", "i18n.py", "mandelbrot.py", "pi.py", "hardware.py", "worker_util.py", "lastgen.py",
-           "requirements.txt", "start.bat", "README.md", "README.de.md",
+$files = @("server.py", "app.py", "i18n.py", "security.py", "mandelbrot.py", "pi.py", "hardware.py", "worker_util.py", "lastgen.py",
+           "requirements.txt", "start.bat", "README.md", "README.de.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
            "static\index.html", "static\app.js", "static\mandel.js", "static\pi.js", "static\style.css",
            "csharp\MandelBench\Program.cs", "csharp\MandelBench\MandelBench.csproj",
            "rust\mandelbench\Cargo.toml", "rust\mandelbench\src\main.rs", "rust\mandelbench\.cargo\config.toml",
            "native\mandel_core.h", "native\build.bat", "native\c\mandel.c", "native\cpp\mandel.cpp",
            "native\asm\kernel.asm", "native\gpu\mandel.hlsl", "native\gpu\mandel_gpu.cpp",
-           "tools\export.ps1", "tools\privacy_check.py", "tools\glossar.py", "tools\selftest.py",
+           "tools\export.ps1", "tools\privacy_check.py", "tools\glossar.py", "tools\selftest.py", "tools\collect_licenses.py",
            "tools\INSTALLATION_Full.txt", "tools\INSTALLATION_Lite.txt",
            "tools\INSTALLATION_Komplett.txt", "tools\INSTALLATION_Klein.txt",
            "export_full.bat", "export_lite.bat")
@@ -84,6 +84,10 @@ if ($Variante -eq "Full") {
         -r "$root\requirements.txt" numba
     if ($LASTEXITCODE) { throw "pip install failed" }
 
+    Step "Collecting the license texts of all bundled components (licenses\)"
+    & python "$PSScriptRoot\collect_licenses.py" $work
+    if ($LASTEXITCODE) { throw "collecting license texts failed" }
+
     Step "Adding the Pi reference (mpmath, 1 million digits)"
     if (Test-Path "$root\benchmarks\pi_referenz_mpmath.txt") { CopyItem "benchmarks\pi_referenz_mpmath.txt" }
 }
@@ -107,6 +111,9 @@ $zipOut = Join-Path $exportDir "$name.zip"
 if (Test-Path $zipOut) { Remove-Item $zipOut -Force }
 & tar.exe -a -c -f $zipOut -C $exportDir $name
 if ($LASTEXITCODE) { throw "creating ZIP failed" }
+$hash = (Get-FileHash $zipOut -Algorithm SHA256).Hash.ToLower()
+Set-Content "$zipOut.sha256" -Encoding ascii -Value "$hash  $name.zip"   # check with: Get-FileHash <zip> -Algorithm SHA256
 $size = (Get-ChildItem $work -Recurse -File | Measure-Object Length -Sum).Sum
 Remove-Item $work -Recurse -Force   # only the ZIP remains; the Python download stays in export\_cache for the next run
 Write-Host ("`nDone: {0}  (ZIP {1:N1} MB, unpacked {2:N1} MB)" -f $zipOut, ((Get-Item $zipOut).Length / 1MB), ($size / 1MB)) -ForegroundColor Green
+Write-Host "SHA-256: $hash  ($name.zip.sha256)"

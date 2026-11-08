@@ -126,6 +126,8 @@ G = [
          "https://visualstudio.microsoft.com/de/downloads/"),
     ]),
     ("Ergänzungen", [
+        ("DNS-Rebinding", "Angriff, bei dem eine fremde Webseite ihren Namen auf 127.0.0.1 umleitet, um aus dem Browser heraus lokale Dienste zu steuern. Der Monitor prüft deshalb bei jeder Anfrage Host und Herkunft und weist Fremdes ab.",
+         "https://en.wikipedia.org/wiki/DNS_rebinding"),
         ("Fehlalarm (False Positive)", "Ein Virenscanner hält ein harmloses Programm für gefährlich, weil es sich ähnlich verhält wie Schadsoftware (z. B. unsignierte .exe, volle Auslastung aller Kerne). Siehe „Hinweis zum Virenscanner“.",
          "https://de.wikipedia.org/wiki/Falsch_positiv"),
         ("Quarantäne", "Abgeschotteter Bereich des Virenscanners für verdächtige Dateien; von dort lassen sie sich wiederherstellen.",
@@ -154,6 +156,7 @@ G = [
 ]
 # ---- English: German term -> (English term, explanation, link; None = same link as German) ----
 EN = {
+    "DNS-Rebinding": ("DNS rebinding", "Attack in which a foreign website points its name to 127.0.0.1 to control local services from the browser. The monitor therefore checks Host and origin of every request and rejects anything foreign.", "https://en.wikipedia.org/wiki/DNS_rebinding"),
     "Kern (Prozessorkern)": ("Core (processor core)", "Independent execution unit inside the processor. The Threadripper 3960X has 24 cores.", "https://en.wikipedia.org/wiki/Multi-core_processor"),
     "Thread (Hardware-Thread, logischer Prozessor)": ("Thread (hardware thread, logical processor)", "What Windows counts as a \"CPU\". With SMT every core offers 2 threads, i.e. 48 on the 3960X.", "https://en.wikipedia.org/wiki/Thread_(computing)"),
     "SMT (Simultaneous Multithreading, bei Intel „Hyper-Threading“)": ("SMT (simultaneous multithreading, Intel: \"Hyper-Threading\")", "One core runs two instruction streams at once and fills gaps in its execution units. Usually gains 0–30 %, not 100 %.", "https://en.wikipedia.org/wiki/Simultaneous_multithreading"),

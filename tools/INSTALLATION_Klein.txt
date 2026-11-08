@@ -67,6 +67,8 @@ PROBLEME?
 - Beschreibung und Projektbericht liegen zweisprachig bei: README.de.md / README.md,
   Projektbericht_Parallelisierung.pdf (Deutsch) / Project_Report_Core_Monitor.pdf (Englisch).
 - Fachbegriffe (numba, SIMD, CCX, Kardioide ...) sind in README.de.md im Abschnitt "Begriffe kurz erklärt" erklärt, mit Links.
+- Ein roter Hinweis oben auf der Seite bedeutet: Der Server hat Anfragen von außen abgewiesen (z. B. eine
+  fremde Webseite). Ausgeführt wurde nichts; Details in logs\security.log. Lizenz: LICENSE, THIRD_PARTY_NOTICES.md.
 
 VIRENSCANNER (wichtig, aber kein Grund zur Sorge)
 -------------------------------------------------

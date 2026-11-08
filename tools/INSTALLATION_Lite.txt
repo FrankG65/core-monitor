@@ -67,6 +67,8 @@ PROBLEMS?
 - Description and project report are included in both languages: README.md / README.de.md,
   Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).
 - Technical terms (numba, SIMD, CCX, cardioid ...) are explained in README.md in the "Glossary" section, with links.
+- A red notice at the top of the page means: the server rejected requests from outside (e.g. a foreign
+  website). Nothing was executed; details in logs\security.log. License: LICENSE, THIRD_PARTY_NOTICES.md.
 
 ANTIVIRUS SOFTWARE (important, but no cause for concern)
 --------------------------------------------------------

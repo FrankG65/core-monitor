@@ -51,6 +51,16 @@ einzelne Starts mit „Zugriff verweigert“, Sekunden später lief alles.
 
 Den Virenscanner bitte **nicht** abschalten. numba, numpy und Pi laufen auch, wenn alle `.exe`-Dateien blockiert sind.
 
+## Sicherheit: Anfragen von außen werden abgewiesen
+
+Der Server lauscht nur auf `127.0.0.1` (dieser PC). Zusätzlich muss jede Anfrage – HTTP und die Live-Verbindung
+(WebSocket) – von diesem PC kommen **und** an `127.0.0.1:<Port>`, `localhost:<Port>` oder `[::1]:<Port>` gerichtet sein;
+nennt der Browser die anfragende Seite (Origin), muss es ebenfalls diese Seite sein. Das verhindert Angriffe wie
+**DNS-Rebinding** und fremde Webseiten im Browser, die den Monitor steuern wollen.
+Abgewiesene Anfragen erhalten HTTP 403, werden in `logs/security.log` gespeichert (Zeit, Grund, Methode, Pfad, Host,
+Origin, User-Agent; höchstens 4 × 1 MB) und **gemeldet**: Warnung im Konsolenfenster und roter Hinweis in der Kopfzeile
+der Seite mit den letzten Ereignissen. Der automatische Selbsttest prüft das bei jedem Push.
+
 ## Weitergabe an andere PCs (Export)
 
 | Paket | Bauen mit | Größe | Ziel-PC braucht |
@@ -420,6 +430,18 @@ CSV/JSON `aufwendige_zuerst`.
   128 px ist ein guter Standardwert.
 - Alle Erklärungen auf der Seite sind beim Laden eingeklappt und lassen sich bei Bedarf öffnen.
 
+## Lizenz
+
+Kern-Monitor steht unter der [MIT-Lizenz](LICENSE). Das Paket „Full“ enthält Software Dritter (Python, numpy,
+numba, gmpy2/GMP, FastAPI, die .NET-Laufzeit, Microsoft-C/C++-Laufzeitbibliotheken, …) unter deren eigenen Lizenzen –
+siehe [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); die vollständigen Lizenztexte liegen im Paket im Ordner
+`licenses\`.
+
+## Entstehung
+
+Dieses Projekt – Code, Dokumentation und Berichte – wurde mit **Claude (Anthropic) über Claude Code** umgesetzt,
+in enger Zusammenarbeit mit dem und gesteuert vom Inhaber des Repositorys, als Machbarkeitsstudie zur Parallelisierung.
+
 ## Begriffe kurz erklärt
 
 Alphabetisch, mit Link zu einer weiterführenden Quelle.
@@ -444,6 +466,7 @@ Alphabetisch, mit Link zu einer weiterführenden Quelle.
 - **CPU-Affinität (Platzierung):** Festlegung, auf welchen Threads ein Prozess laufen darf. Damit testet der Monitor „1 Thread je Kern zuerst“ gegen „kompakt“. <https://en.wikipedia.org/wiki/Processor_affinity>
 - **Digitale Signatur (Code-Signatur):** Elektronische Unterschrift eines Herstellers an einer .exe; signierte, verbreitete Programme lösen seltener Warnungen aus. Die Programme des Kern-Monitors sind nicht signiert. <https://en.wikipedia.org/wiki/Code_signing>
 - **Direct3D 11 Compute-Shader / HLSL:** Programm, das auf der Grafikkarte läuft; geschrieben in HLSL, gestartet über Direct3D 11 (funktioniert mit jeder aktuellen Grafikkarte unter Windows). <https://learn.microsoft.com/de-de/windows/win32/direct3d11/direct3d-11-advanced-stages-compute-shader>
+- **DNS-Rebinding:** Angriff, bei dem eine fremde Webseite ihren Namen auf 127.0.0.1 umleitet, um aus dem Browser heraus lokale Dienste zu steuern. Der Monitor prüft deshalb bei jeder Anfrage Host und Herkunft und weist Fremdes ab. <https://en.wikipedia.org/wiki/DNS_rebinding>
 - **double / float:** Kommazahlen mit doppelter (≈ 16 Stellen) bzw. einfacher Genauigkeit (≈ 7 Stellen) nach IEEE 754. Spiele-Grafikkarten sind mit float viel schneller. <https://de.wikipedia.org/wiki/IEEE_754>
 - **DXGI:** Windows-Schnittstelle, über die der Monitor die vorhandenen Grafikkarten und ihren Speicher erkennt. <https://learn.microsoft.com/de-de/windows/win32/direct3ddxgi/dx-graphics-dxgi>
 - **Embedded Python:** Offizielles, schlankes Python zum Mitgeben in einem Ordner, ohne Installation. Steckt im Paket „Komplett“. <https://docs.python.org/3/using/windows.html#the-embeddable-package>

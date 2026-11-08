@@ -18,7 +18,7 @@ from pathlib import Path
 
 import psutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -26,6 +26,7 @@ import hardware
 import lastgen
 import mandelbrot
 import pi
+import security
 from i18n import L, get_lang, set_lang, LANGS
 
 HOST = "127.0.0.1"     # fixed on purpose: the server is reachable only on this computer
@@ -239,6 +240,7 @@ async def _sample_once():
         "bench": bench_state,
         "mandel": mandel.status(),
         "pi": pim.status(),
+        "security": security.status(),
     }
     for ws in list(clients):  # copy: browsers may join or leave during await
         try:
@@ -299,6 +301,22 @@ async def no_stale_pages(request, call_next):
     return response
 
 
+@app.middleware("http")
+async def only_this_pc(request, call_next):
+    """Reject requests from outside (foreign client, Host or Origin – see security.py): 403, log, warning."""
+    client, host, origin = request.client.host if request.client else None, request.headers.get("host"), request.headers.get("origin")
+    reason = security.problem(client, host, origin)
+    if reason:
+        security.record(reason, client, host, origin, request.method, request.url.path, request.headers.get("user-agent"))
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    return await call_next(request)
+
+
+@app.get("/api/security")
+def security_status():
+    return security.status()
+
+
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
@@ -310,7 +328,7 @@ def system_info() -> dict:
     cpu["l3_groups"] = len(L3_GROUPS)
     cpu["topology_source"] = topology_source_text(TOPOLOGY_SOURCE)
     return {"cpu": cpu, "gpus": GPUS, "gpu_default": GPU_DEFAULT, "engines": engine_status(),
-            "bench_steps": BENCH_STEPS, "host": platform.node()}
+            "bench_steps": BENCH_STEPS}
 
 
 def print_system():
@@ -336,7 +354,7 @@ def system():
 
 @app.get("/api/info")
 def info():
-    return {"logical": LOGICAL, "physical": PHYSICAL, "cpu": CPU["name"], "host": platform.node(),
+    return {"logical": LOGICAL, "physical": PHYSICAL, "cpu": CPU["name"],
             "freq_max": CPU["max_mhz"], "interval": SAMPLE_INTERVAL, "boot": BOOT_ID, "assets": assets_stamp(),
             "topology": TOPOLOGY, "l3": L3_GROUPS, "topology_source": topology_source_text(TOPOLOGY_SOURCE),
             "smt": CPU["smt"],
@@ -537,6 +555,12 @@ def mandel_bench(req: MandelBenchRequest):
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
+    client, host, origin = ws.client.host if ws.client else None, ws.headers.get("host"), ws.headers.get("origin")
+    reason = security.problem(client, host, origin)
+    if reason:
+        security.record(reason, client, host, origin, "WS", "/ws", ws.headers.get("user-agent"))
+        await ws.close(code=1008)   # policy violation; before accept() this rejects the handshake (HTTP 403)
+        return
     await ws.accept()
     clients.add(ws)
     try:

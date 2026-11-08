@@ -185,3 +185,9 @@ html[lang="de"] [data-l="en"], html[lang="en"] [data-l="de"] { display: none !im
 .lang-switch button { font-size: 12px; padding: 2px 8px; border: 0; border-radius: 0; background: var(--panel); color: var(--muted); }
 .lang-switch button + button { border-left: 1px solid var(--line); }
 .lang-switch button.on { background: var(--accent); color: #fff; font-weight: 600; cursor: default; }
+/* Warning: requests from outside were rejected (security.py) */
+.sec-warn { margin-top: 6px; padding: 4px 10px; border: 1px solid var(--high); border-radius: 6px; color: var(--high);
+            background: color-mix(in srgb, var(--high) 10%, transparent); font-size: 13px; max-width: 760px; }
+.sec-warn summary { cursor: pointer; font-weight: 600; }
+.sec-warn div, .sec-warn table { color: var(--text); margin-top: 6px; }
+.sec-warn td { font-weight: 400 !important; font-size: 12px; padding-right: 10px; word-break: break-all; }

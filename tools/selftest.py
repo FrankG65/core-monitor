@@ -5,6 +5,7 @@ Starts the server on a free port (127.0.0.1), then checks:
   - every available computation method renders an image; all CPU methods are bit-identical to numba
     (GPU methods may differ slightly or be unavailable, e.g. on a machine without a graphics card)
   - a short scaling test and Pi with 10,000 digits verified against mpmath
+  - requests from outside (foreign Host / Origin) are rejected, logged and counted
   - the privacy check on all files tracked by git (if git is available)
 Files the test creates in benchmarks/ are removed again afterwards.
 
@@ -15,7 +16,7 @@ Exit code 0 = all checks passed.
 """
 from __future__ import annotations
 
-import argparse, base64, hashlib, json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse, base64, hashlib, json, os, shutil, socket, subprocess, sys, tempfile, time, urllib.error, urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,7 +61,9 @@ def free_port() -> int:
 class Server:
     def __init__(self):
         self.base = f"http://127.0.0.1:{free_port()}"
-        env = dict(os.environ, PORT=self.base.rsplit(":", 1)[1], KM_LANG="en", PYTHONUNBUFFERED="1")
+        self.seclog = Path(tempfile.mkdtemp()) / "security.log"   # keep test entries out of logs/security.log
+        env = dict(os.environ, PORT=self.base.rsplit(":", 1)[1], KM_LANG="en", PYTHONUNBUFFERED="1",
+                   KM_SECURITY_LOG=str(self.seclog))
         env.pop("OPEN_BROWSER", None)
         self.log = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "server.py"], cwd=ROOT, env=env, stdout=self.log, stderr=subprocess.STDOUT)
@@ -81,6 +84,14 @@ class Server:
     def post(self, path, body):
         r = urllib.request.Request(self.base + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
         return json.loads(urllib.request.urlopen(r, timeout=300).read())
+
+    def status_of(self, path, data=None, headers=None) -> int:
+        """HTTP status of a request with custom headers (e.g. a foreign Host or Origin)."""
+        r = urllib.request.Request(self.base + path, data=data, headers=headers or {}, method="POST" if data is not None else "GET")
+        try:
+            return urllib.request.urlopen(r, timeout=30).status
+        except urllib.error.HTTPError as e:
+            return e.code
 
     def wait(self, path, bench=False, limit=600):
         t0 = time.time()
@@ -164,6 +175,19 @@ def main():
         check(de.get("lang") == "de" and "zeilenweise" in json.dumps(srv.get("/api/info"), ensure_ascii=False), "switch to German")
         srv.post("/api/lang", {"lang": "en"})
         check("row by row" in json.dumps(srv.get("/api/info")), "switch back to English")
+
+        section("Protection against requests from outside")
+        port = srv.base.rsplit(":", 1)[1]
+        check(srv.status_of("/api/info", headers={"Host": f"evil.example:{port}"}) == 403, "foreign Host header (DNS rebinding) rejected with 403")
+        check(srv.status_of("/api/load/start", json.dumps({"seconds": 1, "intensity": 0.05}).encode(),
+                            {"Content-Type": "application/json", "Origin": "https://evil.example"}) == 403,
+              "POST from a foreign website (Origin) rejected with 403")
+        check(srv.status_of("/api/info", headers={"Host": f"localhost:{port}", "Origin": f"http://localhost:{port}"}) == 200,
+              "own page via localhost still allowed")
+        sec = srv.get("/api/security")
+        check(sec.get("blocked") == 2 and sec["recent"][0]["reason"] == "origin", "rejections counted for the warning on the page")
+        logged = srv.seclog.read_text(encoding="utf-8") if srv.seclog.exists() else ""
+        check(logged.count("BLOCKED") == 2, "rejections written to the security log")
 
         section("Availability")
         required = [e for e in args.require.split(",") if e]

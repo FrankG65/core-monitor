@@ -51,6 +51,16 @@ with "Access is denied"; a few seconds later everything ran.
 
 Please do **not** turn off your antivirus software. numba, numpy and Pi still work when all `.exe` files are blocked.
 
+## Security: requests from outside are rejected
+
+The server listens only on `127.0.0.1` (this PC). In addition, every request – HTTP and the live connection
+(WebSocket) – must come from this PC **and** be addressed to `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>`;
+if the browser names the requesting page (Origin), it must be this page as well. This blocks attacks such as
+**DNS rebinding** and foreign websites in the browser trying to control the monitor.
+Rejected requests get HTTP 403, are written to `logs/security.log` (time, reason, method, path, Host, Origin,
+user agent; at most 4 × 1 MB) and are **reported**: a warning in the console window and a red notice in the page
+header with the latest events. The automatic self-test checks this on every push.
+
 ## Distributing to other PCs (export)
 
 | Package | Build with | Size | Target PC needs |
@@ -428,6 +438,18 @@ Reference machine: AMD Threadripper 3960X (24 cores / 48 threads), NVIDIA GeForc
 - Very small tiles (64 px and less) cause noticeable overhead in the main process; 128 px is a good default.
 - All explanations on the page are collapsed on load and can be expanded when needed.
 
+## License
+
+Core Monitor is licensed under the [MIT License](LICENSE). The "Full" package bundles third-party software
+(Python, numpy, numba, gmpy2/GMP, FastAPI, the .NET runtime, Microsoft C/C++ runtime libraries, …) under their own
+licenses – see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the full license texts are in the package's
+`licenses\` folder.
+
+## Development
+
+This project – code, documentation and reports – was developed with **Claude (Anthropic) using Claude Code**,
+in close collaboration with and directed by the repository owner, as a feasibility study on parallel computing.
+
 ## Glossary
 
 Alphabetical, with a link to further reading.
@@ -454,6 +476,7 @@ Alphabetical, with a link to further reading.
 - **"Demanding tiles first":** Order in which a rough up-front estimate puts the most compute-intensive tiles first, so that no long tile is left running alone at the end.
 - **Digital signature (code signing):** Electronic signature of a publisher on an .exe; signed, widely used programs trigger warnings less often. The programs of Core Monitor are not signed. <https://en.wikipedia.org/wiki/Code_signing>
 - **Direct3D 11 compute shader / HLSL:** Program that runs on the graphics card; written in HLSL, launched via Direct3D 11 (works with any current graphics card on Windows). <https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-advanced-stages-compute-shader>
+- **DNS rebinding:** Attack in which a foreign website points its name to 127.0.0.1 to control local services from the browser. The monitor therefore checks Host and origin of every request and rejects anything foreign. <https://en.wikipedia.org/wiki/DNS_rebinding>
 - **double / float:** Floating-point numbers with double (≈ 16 digits) or single precision (≈ 7 digits) according to IEEE 754. Gaming graphics cards are much faster with float. <https://en.wikipedia.org/wiki/IEEE_754>
 - **DXGI:** Windows interface the monitor uses to detect the installed graphics cards and their memory. <https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dx-graphics-dxgi>
 - **Embedded Python:** Official, lean Python distribution that can be shipped in a folder without installation. Included in the "Full" package. <https://docs.python.org/3/using/windows.html#the-embeddable-package>

@@ -39,3 +39,6 @@ __pycache__/
 # Windows
 Thumbs.db
 desktop.ini
+
+# Security log of rejected requests (security.py)
+logs/

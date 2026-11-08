@@ -77,6 +77,7 @@ const css = (v) => `rgb(${color(v).join(",")})`;
 async function init() {
   await langSent;   // so that the server's texts in /api/info (placements, orders, reasons) are in our language
   info = await (await fetch("/api/info")).json();
+  fetch("/api/security").then((r) => r.json()).then(showSecurity).catch(() => {});
   n = info.logical;
   topo = info.topology;
   applySystem(info);
@@ -102,7 +103,7 @@ function applySystem(inf) {
                       : L("keine nutzbare GPU", "no usable GPU");
   const coresThreads = L(`${cpu.physical} Kerne / ${cpu.logical} Threads`, `${cpu.physical} cores / ${cpu.logical} threads`);
   const summary = `${cpu.name}, ${coresThreads}, ${gpuText}`;
-  $("sysinfo").textContent = `${sys.host} · ${cpu.name} · ${coresThreads} · ${gpuText}` +
+  $("sysinfo").textContent = `${cpu.name} · ${coresThreads} · ${gpuText}` +
     (cpu.simulated ? L(" · SIMULIERT", " · SIMULATED") : "");
   $("sys-short").textContent = summary + (cpu.simulated ? L(" (simuliert)", " (simulated)") : "");
   const off = Object.entries(sys.engines).filter(([, r]) => r);
@@ -203,7 +204,26 @@ function connect() {
   };
 }
 
+// Requests from outside that the server rejected (see security.py): red notice in the header with the last events
+let secShown = -1;
+function showSecurity(sec) {
+  if (!sec || sec.blocked === secShown) return;
+  secShown = sec.blocked;
+  const box = $("sec-warn");
+  box.hidden = !sec.blocked;
+  if (!sec.blocked) return;
+  const last = sec.recent[0] || {};
+  $("sec-warn-text").textContent = L(`⚠ ${sec.blocked} Anfrage(n) von außen abgewiesen – zuletzt ${last.time || ""}`,
+                                     `⚠ ${sec.blocked} request(s) from outside rejected – last ${last.time || ""}`);
+  const esc = (s) => String(s ?? "–").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  $("sec-warn-list").innerHTML =
+    `<tr><th>${L("Zeit", "Time")}</th><th>${L("Grund", "Reason")}</th><th>${L("Anfrage", "Request")}</th><th>Host</th><th>Origin</th></tr>` +
+    sec.recent.map((e) => `<tr><td>${esc(e.time)}</td><td>${esc(e.reason)}</td><td>${esc(e.method)} ${esc(e.path)}</td>` +
+                          `<td>${esc(e.host)}</td><td>${esc(e.origin)}</td></tr>`).join("");
+}
+
 function update(m) {
+  showSecurity(m.security);
   $("s-total").textContent = m.total.toFixed(0) + " %";
   $("s-freq").textContent = m.freq ? (m.freq / 1000).toLocaleString(LANG, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " GHz" : "–";
   $("s-mem").textContent = m.mem.toFixed(0) + " %";

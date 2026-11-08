@@ -26,5 +26,21 @@ The included programs are not digitally signed. Antivirus software or SmartScree
 **unfounded** warning or briefly block a program on first start – see "Note on antivirus software" in
 INSTALLATION.txt / README.md. All source code is included in the package and in this repository.
 
+### Security
+The server listens only on 127.0.0.1 and additionally rejects every request that does not come from its own page on
+this PC (checks client, Host and Origin – protection against DNS rebinding and foreign websites). Rejected requests are
+logged in `logs\security.log` and shown as a red notice in the page header.
+
+### Verify the download
+Each ZIP has a `.sha256` file. In PowerShell: `Get-FileHash CoreMonitor_Full_<date>.zip -Algorithm SHA256` –
+the value must match the one in the `.sha256` file.
+
+### License
+MIT (see `LICENSE`). The Full package bundles third-party software under its own licenses – see
+`THIRD_PARTY_NOTICES.md`; the complete license texts are in the package's `licenses\` folder.
+
+### Development
+Developed with Claude (Anthropic) using Claude Code, directed by the repository owner.
+
 The "Lite" variant (source code only, builds on your PC) is simply this repository:
 **Code → Download ZIP**, then `start.bat` (needs Python 3.11+).
