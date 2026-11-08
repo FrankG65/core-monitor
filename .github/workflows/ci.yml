@@ -1,0 +1,51 @@
+# Automatic test: builds all computation methods from source on a Windows runner and runs tools/selftest.py
+# (every method renders, CPU methods bit-identical to numba, scaling test, Pi vs mpmath, privacy check).
+# The runner has no graphics card: the GPU methods must show up greyed out with a reason.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Python packages
+        run: python -m pip install --disable-pip-version-check -r requirements.txt numba
+
+      - name: Build C#
+        run: dotnet build csharp\MandelBench -c Release -o csharp\bin --nologo -v q
+
+      - name: Build Rust
+        working-directory: rust/mandelbench
+        run: cargo build --release --quiet
+
+      - name: Build C, C++, assembler and GPU host (Visual Studio)
+        shell: cmd
+        run: call native\build.bat
+
+      - name: Self-test
+        run: python tools\selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm

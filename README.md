@@ -82,6 +82,18 @@ Please do **not** turn off your antivirus software. numba, numpy and Pi still wo
 - Tested: both packages in unfamiliar folders; "Full" with an empty PATH (all 13 computation methods, Pi, scaling test)
   and on a simulated small PC; "Lite" with all tools (everything compiled, 13 computation methods) and with Python only.
 
+## Automatic tests and releases (GitHub Actions)
+
+- **CI** (`.github/workflows/ci.yml`): on every push to `main` and every pull request, a Windows runner builds all
+  computation methods from source (C#, Rust, C/C++/assembler/GPU host) and runs `tools/selftest.py`: every method
+  renders, all CPU methods are bit-identical to numba, scaling test, Pi with 10,000 digits verified against mpmath,
+  language switch, privacy check of all tracked files. The runner has no graphics card, so the GPU methods must be
+  greyed out with a reason. Result: green tick / red cross next to the commit and under **Actions**.
+- **Release** (`.github/workflows/release.yml`, started by hand: Actions → Release → Run workflow → tag, e.g. `v1.1`):
+  builds and tests the "Full" package on the runner and attaches `CoreMonitor_Full_<date>.zip` to the release
+  (created with `docs/release_notes.md` if it does not exist yet).
+- Locally: `python tools\selftest.py` (files it creates in `benchmarks\` are removed again).
+
 ## Hardware detection
 
 At start-up, `hardware.py` detects the machine, and everything else adapts to it. This way the program also runs on

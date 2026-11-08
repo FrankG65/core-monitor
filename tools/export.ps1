@@ -39,7 +39,7 @@ $files = @("server.py", "app.py", "i18n.py", "mandelbrot.py", "pi.py", "hardware
            "rust\mandelbench\Cargo.toml", "rust\mandelbench\src\main.rs", "rust\mandelbench\.cargo\config.toml",
            "native\mandel_core.h", "native\build.bat", "native\c\mandel.c", "native\cpp\mandel.cpp",
            "native\asm\kernel.asm", "native\gpu\mandel.hlsl", "native\gpu\mandel_gpu.cpp",
-           "tools\export.ps1", "tools\privacy_check.py", "tools\glossar.py",
+           "tools\export.ps1", "tools\privacy_check.py", "tools\glossar.py", "tools\selftest.py",
            "tools\INSTALLATION_Full.txt", "tools\INSTALLATION_Lite.txt",
            "tools\INSTALLATION_Komplett.txt", "tools\INSTALLATION_Klein.txt",
            "export_full.bat", "export_lite.bat")

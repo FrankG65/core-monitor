@@ -82,6 +82,19 @@ Den Virenscanner bitte **nicht** abschalten. numba, numpy und Pi laufen auch, we
 - Getestet: beide Pakete in fremden Ordnern; „Full“ mit leerem PATH (alle 13 Rechenverfahren, Pi, Skalierungstest) und
   mit simuliertem kleinem PC; „Lite“ mit allen Werkzeugen (alles übersetzt, 13 Rechenverfahren) und nur mit Python.
 
+## Automatische Tests und Releases (GitHub Actions)
+
+- **CI** (`.github/workflows/ci.yml`): Bei jedem Push auf `main` und jedem Pull Request übersetzt ein Windows-Rechner
+  von GitHub alle Rechenverfahren aus den Quelltexten (C#, Rust, C/C++/Assembler/GPU-Programm) und führt
+  `tools/selftest.py` aus: jedes Verfahren rechnet, alle CPU-Verfahren bitgenau wie numba, Skalierungstest, Pi mit
+  10.000 Stellen gegen mpmath, Sprachumschaltung, Datenschutz-Prüfung aller Dateien im Repository. Der Rechner hat keine
+  Grafikkarte; die GPU-Verfahren müssen daher ausgegraut mit Grund erscheinen. Ergebnis: grüner Haken / rotes Kreuz am
+  Commit und unter **Actions**.
+- **Release** (`.github/workflows/release.yml`, von Hand gestartet: Actions → Release → Run workflow → Tag, z. B. `v1.1`):
+  baut und testet das Paket „Full“ auf dem GitHub-Rechner und hängt `CoreMonitor_Full_<Datum>.zip` an das Release
+  (das bei Bedarf mit `docs/release_notes.md` angelegt wird).
+- Lokal: `python tools\selftest.py` (vom Test angelegte Dateien in `benchmarks\` werden wieder entfernt).
+
 ## Hardware-Erkennung
 
 Beim Start erkennt `hardware.py` den Rechner, alles andere richtet sich danach. So läuft das Programm auch auf
