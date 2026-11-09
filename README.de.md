@@ -5,11 +5,18 @@
 Web-Oberfläche zum Überwachen und gezielten Auslasten aller CPU-Kerne – mit der
 Mandelbrot-Menge als echter, parallel berechneter Aufgabe und einem Skalierungstest.
 
-**Status:** Machbarkeitsstudie, experimentell. Läuft nur unter Windows 10/11 (64 Bit, x64).
+**Status:** Machbarkeitsstudie, experimentell. Läuft unter Windows 10/11 (64 Bit, x64) und unter Linux (Debian 12 / Ubuntu 22.04 oder neuer, x86-64).
 
 ## Start
 
+Windows:
+
     start.bat
+
+Linux (Debian / Ubuntu) – Einzelheiten unter [Linux](#linux-debian--ubuntu):
+
+    sudo apt install python3 python3-venv build-essential nasm ocl-icd-opencl-dev
+    ./start.sh
 
 oder manuell:
 
@@ -17,7 +24,7 @@ oder manuell:
     python -m pip install numba        (optional, ca. 3–4× schnelleres Rechenverfahren)
     python server.py
 
-Danach im Browser: http://127.0.0.1:8000 (start.bat öffnet die Seite selbst, falls sie nicht schon offen ist)
+Danach im Browser: http://127.0.0.1:8000 (start.bat / start.sh öffnen die Seite selbst, falls sie nicht schon offen ist)
 
 **Sprache:** Oben in der Kopfzeile schaltet **DE | EN** zwischen Deutsch und Englisch um. Die Wahl merkt sich der
 Browser; ohne Wahl startet die Seite auf Englisch. Meldungen des Servers folgen der gewählten Sprache. Die Startsprache
@@ -25,6 +32,40 @@ des Servers lässt sich mit `set KM_LANG=de` bzw. `set KM_LANG=en` festlegen (Vo
 
 **Sicherheit:** Der Server bindet fest an `127.0.0.1` und ist damit nur auf diesem Rechner
 erreichbar, nicht aus dem LAN oder Internet. Der Port lässt sich mit `set PORT=8001` ändern.
+
+## Linux (Debian / Ubuntu)
+
+Seit November 2026 läuft derselbe Ordner auch unter Linux – gleiche Seite, gleiche 13 Rechenverfahren, gleiche Bilder.
+`start.sh` legt eine eigene Python-Umgebung an (`.venv`, das System-Python bleibt unverändert), installiert die Pakete
+und übersetzt, was die installierten Werkzeuge erlauben; fehlende Werkzeuge grauen nur die betroffenen Rechenverfahren aus.
+
+| | Windows | Linux |
+|---|---|---|
+| Start | `start.bat` | `./start.sh` (Python 3.10+, Pakete in `.venv`) |
+| C, C++ | MSVC (Visual Studio), Win32-Threads | GCC (`build-essential`), POSIX-Threads |
+| Assembler | MASM, `native/asm/kernel.asm` | NASM, `native/asm/kernel_nasm.asm` (gleiche Befehle, Linux-Aufrufkonvention) |
+| GPU | Direct3D-11-Compute-Shader (`mandel.hlsl`) | OpenCL-Kernel (`native/gpu/mandel.cl`, `mandel_opencl.cpp`) |
+| C#, Rust | .NET 10 SDK, cargo | ebenso (`dotnet-sdk-10.0`, `cargo` per apt oder rustup) |
+| Kern-/Thread-Zuordnung | `GetLogicalProcessorInformationEx` | `/sys/devices/system/cpu` |
+| Festlegen, Priorität | `SetThreadAffinityMask`, „niedriger als normal“ | `sched_setaffinity`, nice 5 / 10 |
+| Bauskript | `native\build.bat` | `native/build.sh` |
+| Pakete | `export_full.bat`, `export_lite.bat` (ZIP) | `export_full.sh`, `export_lite.sh` (tar.gz) |
+
+- **Installation** (eine Zeile, alles außer C# und Rust):
+  `sudo apt install python3 python3-venv build-essential nasm ocl-icd-opencl-dev clinfo`.
+  Rust: `sudo apt install cargo` (oder rustup). C#: `sudo apt install dotnet-sdk-10.0` (Ubuntu 24.04+; sonst
+  [Anleitung von Microsoft](https://learn.microsoft.com/de-de/dotnet/core/install/linux)). Einzelheiten: `tools/INSTALLATION_LINUX_Klein.txt`.
+- **GPU:** braucht einen OpenCL-Treiber für die Grafikkarte (NVIDIA: Hersteller-Treiber; AMD: ROCm; Intel:
+  `intel-opencl-icd`); `clinfo -l` muss die Karte auflisten. Reine CPU-OpenCL-Treiber (z. B. POCL) werden nicht als
+  „Grafikkarte“ angeboten. In WSL sind die GPU-Verfahren ausgegraut (kein OpenCL-Zugriff auf die Karte).
+- **Bitgenau:** C, C++, Assembler, C#, Rust und numba liefern unter Linux exakt dasselbe Bild wie unter Windows
+  (GCC mit `-ffp-contract=off`, also ohne FMA). Der OpenCL-Kernel nutzt `#pragma OPENCL FP_CONTRACT OFF`; auf POCL (CPU)
+  ist sogar „GPU double“ bitgenau, auf echten Grafikkarten können wie bei Direct3D einzelne Pixel abweichen.
+- **Thread-Nummerierung:** Linux nummeriert den zweiten SMT-Thread eines Kerns oft getrennt (AMD: Kern 0 = Threads 0
+  und 24). Kernansicht und Heatmap folgen der echten Topologie aus `/sys`; auch Platzierungen wie „kompakt“.
+- **Worker-Prozesse** starten wie unter Windows mit `spawn`, nicht mit `fork`: sicherer mit den Threads des Webservers.
+- **WSL** (Linux unter Windows) funktioniert ebenfalls; http://127.0.0.1:8000 im Windows-Browser öffnen.
+- Messungen unter Linux auf dem Referenzrechner stehen noch aus; die Erkenntnisse unten stammen von Windows.
 
 ## Hinweis zum Virenscanner (unbegründete Warnungen)
 
@@ -67,6 +108,16 @@ der Seite mit den letzten Ereignissen. Der automatische Selbsttest prüft das be
 |---|---|---|---|
 | **„Full“ (Komplett)** | `export_full.bat` | ZIP ≈ 104 MB, entpackt ≈ 281 MB | nur Windows 10/11 (64 Bit) – kein Python, kein Internet, keine Admin-Rechte |
 | **„Lite“ (Klein)** | `export_lite.bat` | ZIP ≈ 0,1 MB | Python 3.11+ und Internet beim ersten Start; optional .NET SDK, Rust, Visual Studio C++ (siehe INSTALLATION.de.txt) |
+| **„Full“ (Linux)** | `./export_full.sh` | tar.gz ≈ 150 MB, entpackt ≈ 470 MB | nur Debian 12 / Ubuntu 22.04 oder neuer (x86-64) – kein Python, kein Internet, kein sudo |
+| **„Lite“ (Linux)** | `./export_lite.sh` | tar.gz ≈ 1 MB | Python 3.10+ mit venv und Internet beim ersten Start; optional GCC, NASM, OpenCL, .NET SDK, Rust (siehe INSTALLATION.de.txt) |
+
+- Linux: Beide Skripte rufen `tools/export.sh Full` bzw. `Lite` auf; Ergebnis `export/CoreMonitor_Full_Linux_<Datum>.tar.gz`
+  (tar.gz behält das „ausführbar“-Kennzeichen von `start.sh`). Das Linux-Paket „Full“ enthält Python 3.11 von
+  [python-build-standalone](https://github.com/astral-sh/python-build-standalone) (Download per SHA-256 geprüft),
+  C/C++ mit fest eingebundener C++-Laufzeit und C# als eigenständiges Programm. Gebaut werden sollte es auf dem ältesten
+  unterstützten System (Ubuntu 22.04, glibc 2.35), wie es der Release-Workflow tut. Gleiche Datenschutz-Prüfung wie unter
+  Windows (Home-Ordner, Benutzer- und Rechnername, LAN- und MAC-Adressen); pip läuft mit `--no-compile`, damit keine
+  `.pyc`-Datei den Baupfad enthält.
 
 - Beide Batch-Dateien rufen `tools\export.ps1 -Variante Full` bzw. `-Variante Lite` auf.
 - Ergebnis: `export\CoreMonitor_Full_<Datum>.zip` bzw. `export\CoreMonitor_Lite_<Datum>.zip`.
@@ -94,14 +145,17 @@ der Seite mit den letzten Ereignissen. Der automatische Selbsttest prüft das be
 
 ## Automatische Tests und Releases (GitHub Actions)
 
-- **CI** (`.github/workflows/ci.yml`): Bei jedem Push auf `main` und jedem Pull Request übersetzt ein Windows-Rechner
-  von GitHub alle Rechenverfahren aus den Quelltexten (C#, Rust, C/C++/Assembler/GPU-Programm) und führt
+- **CI** (`.github/workflows/ci.yml`): Bei jedem Push auf `main` und jedem Pull Request übersetzen ein Windows- und ein
+  Ubuntu-Rechner von GitHub jeweils alle Rechenverfahren aus den Quelltexten (C#, Rust, C/C++/Assembler/GPU-Programm) und führt
   `tools/selftest.py` aus: jedes Verfahren rechnet, alle CPU-Verfahren bitgenau wie numba, Skalierungstest, Pi mit
   10.000 Stellen gegen mpmath, Sprachumschaltung, Datenschutz-Prüfung aller Dateien im Repository. Der Rechner hat keine
-  Grafikkarte; die GPU-Verfahren müssen daher ausgegraut mit Grund erscheinen. Ergebnis: grüner Haken / rotes Kreuz am
-  Commit und unter **Actions**.
+  Grafikkarte; die GPU-Verfahren müssen daher unter Windows ausgegraut mit Grund erscheinen. Der Ubuntu-Rechner
+  (Python 3.10, die älteste unterstützte Version) installiert POCL, einen OpenCL-Treiber, der auf dem Prozessor rechnet;
+  so wird auch das OpenCL-GPU-Programm übersetzt und geprüft („GPU double“ muss dort bitgenau sein). Ergebnis: grüner
+  Haken / rotes Kreuz am Commit und unter **Actions**.
 - **Release** (`.github/workflows/release.yml`, von Hand gestartet: Actions → Release → Run workflow → Tag, z. B. `v1.1`):
-  baut und testet das Paket „Full“ auf dem GitHub-Rechner und hängt `CoreMonitor_Full_<Datum>.zip` an das Release
+  baut und testet die Pakete „Full“ für Windows und Linux (Linux auf Ubuntu 22.04) und hängt
+  `CoreMonitor_Full_<Datum>.zip` und `CoreMonitor_Full_Linux_<Datum>.tar.gz` an das Release
   (das bei Bedarf mit `docs/release_notes.md` angelegt wird).
 - Lokal: `python tools\selftest.py` (vom Test angelegte Dateien in `benchmarks\` werden wieder entfernt).
 
@@ -111,18 +165,19 @@ Beim Start erkennt `hardware.py` den Rechner, alles andere richtet sich danach. 
 anderen PCs.
 - **CPU:** Name, Hersteller, Kerne und Threads, SMT, Kern-/Thread-Zuordnung, L3-Gruppen (CCX), NUMA-Knoten,
   Prozessorgruppen, Takt, Befehlssätze (SSE2, AVX, AVX2, FMA, AVX-512F), Arbeitsspeicher
-- **Grafikkarten:** alle über DXGI (`native/bin/mandel_gpu.exe --probe`) mit Name, Speicher, Treiber, Feature-Level,
-  Compute-Shader und double. Verwendet wird automatisch die Karte mit dem meisten eigenen Speicher (keine Software-Karte).
+- **Grafikkarten:** alle über DXGI unter Windows (`native/bin/mandel_gpu.exe --probe`) bzw. über OpenCL unter Linux
+  (`native/bin/mandel_gpu --probe`) mit Name, Speicher, Treiber, Feature-Level / OpenCL-Version, Compute und double. Verwendet wird automatisch die Karte mit dem meisten eigenen Speicher (keine Software-Karte).
 - **Daraus abgeleitet:** Worker-/Thread-Regler (Maximum und Voreinstellung = Zahl der Threads), Stufen der
   Skalierungstests (Zweierpotenzen, halbe/ganze Kernzahl, Mitte des SMT-Bereichs, alle Threads), Kernansicht und
   Heatmap (nach L3-Gruppen und SMT, sonst einfache Gruppen), Platzierungen („kompakt“ nur mit SMT; über 64 Threads nur
-  „Windows“), angebotene Rechenverfahren (SIMD und Assembler nur mit AVX2, GPU nur mit Direct3D-11-Compute, „GPU double“
+  „Windows“), angebotene Rechenverfahren (SIMD und Assembler nur mit AVX2, GPU nur mit Direct3D-11-Compute bzw. OpenCL-Treiber, „GPU double“
   nur mit double-Unterstützung; nicht nutzbare erscheinen ausgegraut mit Begründung), Diagrammachsen und die Zahlen in
   den Erklärtexten. Messwerte in den Erklärungen sind als Werte des Referenzrechners gekennzeichnet.
 - C, C++ und Assembler werden **ohne** `/arch:AVX2` übersetzt und prüfen zur Laufzeit, ob AVX2 vorhanden ist; sie laufen
   damit auch auf älteren CPUs (gleiches Bild, gleiche Geschwindigkeit wie vorher gemessen).
 - Die erkannten Werte zeigt die Box „System“ oben auf der Seite und `GET /api/system`.
-- Test eines anderen Rechners: `set KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0` vor dem Start.
+- Test eines anderen Rechners: `set KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0` vor dem Start
+  (Linux: `KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0 ./start.sh`).
 
 ## Funktionen
 
@@ -130,7 +185,7 @@ anderen PCs.
   (je 2 SMT-Threads) und den 8 L3-Gruppen (CCX, je 3 Kerne). Aktualisierung jede Sekunde
   per WebSocket, mit 60-s-Verlauf je Thread. Dazu CPU gesamt, Takt und RAM.
   Die Zuordnung Kern ↔ Thread kommt unter Windows aus `GetLogicalProcessorInformationEx`
-  (per ctypes), sonst gilt die Annahme „Thread 2n und 2n+1 = Kern n“.
+  (per ctypes), unter Linux aus `/sys/devices/system/cpu`, sonst gilt die Annahme „Thread 2n und 2n+1 = Kern n“.
 - **Mandelbrot-Menge** (neben der Kernansicht, damit die Lastverteilung sichtbar ist):
   - das Bild wird in Kacheln zerlegt, ein Prozess-Pool (`ProcessPoolExecutor`) mit 1–48 Workern berechnet sie
   - Rechenverfahren (13, siehe Tabelle unten): Python + numba (JIT-kompiliert), Python + numpy (vektorisiert), C# / .NET mit echten Threads
@@ -186,12 +241,12 @@ anderen PCs.
 | C# / .NET + SIMD | Threads, 4 Pixel gleichzeitig | wie C#, je Thread 4 Bildpunkte gleichzeitig (AVX2, `Vector256<double>`) |
 | Rust | Threads, 1 Pixel je Schritt | Rust mit echten Threads und gemeinsamer Kachel-Warteschlange |
 | Rust + SIMD | Threads, 4 Pixel gleichzeitig | Rust mit AVX2-Befehlen |
-| C | Threads, 1 Pixel je Schritt | C mit Windows-Threads (`CreateThread`) |
+| C | Threads, 1 Pixel je Schritt | C mit Windows-Threads (`CreateThread`) bzw. POSIX-Threads unter Linux |
 | C + SIMD | Threads, 4 Pixel gleichzeitig | C mit AVX2-Intrinsics |
 | C++ | Threads, 1 Pixel je Schritt | C++ mit `std::thread` und `std::atomic` |
 | C++ + SIMD | Threads, 4 Pixel gleichzeitig | C++ mit AVX2-Intrinsics |
 | Assembler | Threads, 4 Pixel gleichzeitig | handgeschriebener x64-Assembler (AVX2) für die innere Schleife, Threads in C |
-| GPU (double) | Grafikkarte, doppelte Genauigkeit | Direct3D-Compute-Shader, je Bildpunkt eine GPU-Recheneinheit; doppelte Genauigkeit wie die CPU, wenige Pixel weichen trotzdem ab (Treiber) |
+| GPU (double) | Grafikkarte, doppelte Genauigkeit | Direct3D-Compute-Shader (Linux: OpenCL-Kernel), je Bildpunkt eine GPU-Recheneinheit; doppelte Genauigkeit wie die CPU, wenige Pixel weichen trotzdem ab (Treiber) |
 | GPU (float) | Grafikkarte, einfache Genauigkeit | wie GPU (double), viel schneller, Bild weicht leicht ab |
 
 Interne Kennungen (API, Messdateien): `numba`, `numpy`, `csharp`, `csharp_simd`, `rust`, `rust_simd`, `c`, `c_simd`,
@@ -207,13 +262,14 @@ CSV/JSON `aufwendige_zuerst`.
 | `app.py` | FastAPI-Backend: Messung (psutil), WebSocket, Hardware-Anbindung, Last-Generator, Primzahl-Benchmark, API |
 | `worker_util.py`, `lastgen.py` | leichte Module für Worker- und Last-Prozesse (kein Webserver, kein numba im Worker) |
 | `tools/export.ps1`, `export_full.bat`, `export_lite.bat` | Weitergabe-Pakete bauen (`-Variante Full` bzw. `Lite`, siehe „Weitergabe“) |
+| `tools/export.sh`, `export_full.sh`, `export_lite.sh`, `start.sh` | dasselbe für Linux |
 | `tools/glossar.py` | Begriffsliste – einzige Quelle für „Begriffe kurz erklärt“ in README.de.md, „Glossary“ in README.md, Webseite und Bericht (`python tools\glossar.py` erzeugt neu, `… check` prüft die Links) |
 | `mandelbrot.py` | Mandelbrot-Rechenverfahren (numba/numpy), Einfärbung, Prozess-Pool, Skalierungstest, CSV/JSON |
 | `static/index.html`, `app.js`, `style.css` | Oberfläche und Kernansicht, ohne externe Bibliotheken |
 | `static/mandel.js` | Mandelbrot-Steuerung, Live-Kacheln, Skalierungsdiagramm (SVG) |
 | `pi.py` | Pi-Berechnung (Chudnovsky, Binary Splitting, gmpy2), Prozess-Pool, Phasenmessung, Prüfung, Skalierungstest |
 | `static/pi.js` | Pi-Steuerung, Phasenbalken, Stellen-Anzeige, Skalierungsdiagramm |
-| `native/` | C (`c/mandel.c`), C++ (`cpp/mandel.cpp`), Assembler (`asm/kernel.asm`), GPU (`gpu/mandel.hlsl`, `gpu/mandel_gpu.cpp`), gemeinsamer Kern `mandel_core.h`, `build.bat` |
+| `native/` | C (`c/mandel.c`), C++ (`cpp/mandel.cpp`), Assembler (`asm/kernel.asm` für Windows, `asm/kernel_nasm.asm` für Linux), GPU (Windows: `gpu/mandel.hlsl`, `gpu/mandel_gpu.cpp`; Linux: `gpu/mandel.cl`, `gpu/mandel_opencl.cpp`), gemeinsamer Kern `mandel_core.h`, Betriebssystem-Schicht `platform.h`, `build.bat` / `build.sh` |
 | `rust/mandelbench/` | Rust-Gegenstück (echte Threads, skalar und AVX2-SIMD), gleiches Protokoll wie C#; Rechenverfahren „Rust“ und „Rust SIMD“ |
 | `csharp/MandelBench/` | C#-Gegenstück (.NET 10, echte Threads): gleiche Kacheln, Formel und Farben; vom Server als Rechenverfahren „C#“ gestartet |
 | `benchmarks/` | gespeicherte Ergebnisse des Skalierungstests |
@@ -447,17 +503,20 @@ in enger Zusammenarbeit mit dem und gesteuert vom Inhaber des Repositorys, als M
 Alphabetisch, mit Link zu einer weiterführenden Quelle.
 
 - **0.0.0.0:** Server-Einstellung „auf allen Netzwerkkarten erreichbar“. Der Monitor nutzt das bewusst nicht, sondern nur 127.0.0.1.
+- **/sys und /proc:** Virtuelle Ordner, über die Linux Auskunft über die Hardware gibt; daraus liest der Monitor Kerne, Threads und L3-Gruppen. <https://www.kernel.org/doc/html/latest/filesystems/sysfs.html>
 - **127.0.0.1 (localhost):** Adresse des eigenen PCs. Der Server lauscht nur dort und ist deshalb von anderen Rechnern aus nicht erreichbar. <https://de.wikipedia.org/wiki/Localhost>
 - **Amdahlsches Gesetz:** Der nicht parallelisierbare Anteil eines Programms begrenzt die mögliche Beschleunigung, egal wie viele Kerne man einsetzt (siehe Pi). <https://de.wikipedia.org/wiki/Amdahlsches_Gesetz>
 - **API:** Schnittstelle, über die die Seite (oder ein Skript) den Server steuert, z. B. /api/mandel/start. <https://de.wikipedia.org/wiki/Programmierschnittstelle>
+- **apt:** Paketverwaltung von Debian und Ubuntu; installiert z. B. Compiler und Python-Werkzeuge (sudo apt install …). <https://wiki.debian.org/de/Apt>
 - **Assembler (MASM):** Prozessorbefehle in lesbarer Form, von Hand geschrieben. MASM ist der Microsoft Macro Assembler. <https://learn.microsoft.com/de-de/cpp/assembler/masm/microsoft-macro-assembler-reference>
+- **Aufrufkonvention:** Regel, in welchen Registern eine Funktion ihre Argumente bekommt. Windows und Linux unterscheiden sich, daher gibt es den Assembler-Kern zweimal. <https://en.wikipedia.org/wiki/X86_calling_conventions>
 - **„Aufwendige Kacheln zuerst“:** Reihenfolge, bei der eine grobe Vorab-Schätzung die rechenaufwendigsten Kacheln an den Anfang stellt, damit am Ende keine lange Kachel allein übrig bleibt.
 - **AVX-512:** Nachfolger von AVX2 mit 512-Bit-Registern (8 double gleichzeitig). Der Threadripper 3960X hat es nicht; neuere Prozessoren teils schon. <https://de.wikipedia.org/wiki/AVX-512>
 - **AVX2:** SIMD-Befehlssatz aktueller x86-Prozessoren; 256-Bit-Register fassen 4 Kommazahlen (double), also 4 Bildpunkte je Befehl. <https://de.wikipedia.org/wiki/Advanced_Vector_Extensions>
 - **base64:** Verfahren, Binärdaten (hier Bildkacheln) als reinen Text zu verschicken; etwa ein Drittel größer als das Original. <https://de.wikipedia.org/wiki/Base64>
 - **Binary Splitting:** Rechentrick, der die Reihenglieder paarweise zu großen Brüchen zusammenfasst; die Teilstücke lassen sich parallel berechnen, die letzte Division nicht. <https://en.wikipedia.org/wiki/Binary_splitting>
 - **bitgenau:** Jedes Byte des Ergebnisses ist identisch – hier: 0 Pixel Unterschied zwischen den Rechenverfahren.
-- **C / C++:** Klassische, maschinennahe Sprachen. Hier mit dem Microsoft-Compiler (MSVC) aus Visual Studio übersetzt. <https://learn.microsoft.com/de-de/cpp/>
+- **C / C++:** Klassische, maschinennahe Sprachen. Unter Windows mit dem Microsoft-Compiler (MSVC) aus Visual Studio übersetzt, unter Linux mit GCC. <https://learn.microsoft.com/de-de/cpp/>
 - **C# / .NET:** Programmiersprache und Laufzeitumgebung von Microsoft; echte Threads, Übersetzung in Maschinencode zur Laufzeit. <https://learn.microsoft.com/de-de/dotnet/csharp/>
 - **Cache (L1/L2/L3):** Schneller Zwischenspeicher im Prozessor. L1/L2 gehören je einem Kern, L3 teilen sich die Kerne eines CCX. <https://de.wikipedia.org/wiki/Cache>
 - **CCX (Core Complex):** Bei AMD-Zen-Prozessoren eine Gruppe von Kernen mit gemeinsamem L3-Cache; beim 3960X 8 CCX zu je 3 Kernen. Im Monitor „L3-Gruppe“. <https://en.wikipedia.org/wiki/Zen_2>
@@ -469,11 +528,13 @@ Alphabetisch, mit Link zu einer weiterführenden Quelle.
 - **DNS-Rebinding:** Angriff, bei dem eine fremde Webseite ihren Namen auf 127.0.0.1 umleitet, um aus dem Browser heraus lokale Dienste zu steuern. Der Monitor prüft deshalb bei jeder Anfrage Host und Herkunft und weist Fremdes ab. <https://en.wikipedia.org/wiki/DNS_rebinding>
 - **double / float:** Kommazahlen mit doppelter (≈ 16 Stellen) bzw. einfacher Genauigkeit (≈ 7 Stellen) nach IEEE 754. Spiele-Grafikkarten sind mit float viel schneller. <https://de.wikipedia.org/wiki/IEEE_754>
 - **DXGI:** Windows-Schnittstelle, über die der Monitor die vorhandenen Grafikkarten und ihren Speicher erkennt. <https://learn.microsoft.com/de-de/windows/win32/direct3ddxgi/dx-graphics-dxgi>
-- **Embedded Python:** Offizielles, schlankes Python zum Mitgeben in einem Ordner, ohne Installation. Steckt im Paket „Komplett“. <https://docs.python.org/3/using/windows.html#the-embeddable-package>
+- **Embedded Python:** Offizielles, schlankes Python zum Mitgeben in einem Ordner, ohne Installation. Steckt im Windows-Paket „Komplett“ (unter Linux: python-build-standalone). <https://docs.python.org/3/using/windows.html#the-embeddable-package>
 - **FastAPI / uvicorn:** Python-Bausteine für den Webserver: FastAPI beschreibt die Schnittstellen, uvicorn liefert sie aus. <https://fastapi.tiangolo.com/>
 - **Fehlalarm (False Positive):** Ein Virenscanner hält ein harmloses Programm für gefährlich, weil es sich ähnlich verhält wie Schadsoftware (z. B. unsignierte .exe, volle Auslastung aller Kerne). Siehe „Hinweis zum Virenscanner“. <https://de.wikipedia.org/wiki/Falsch_positiv>
 - **FMA (Fused Multiply-Add):** Multiplikation und Addition in einem Schritt mit nur einer Rundung. Schneller, verändert aber die letzte Stelle – und damit einzelne Bildpunkte. <https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation>
+- **GCC:** GNU Compiler Collection: freier Compiler für C und C++, unter Linux der Standard. Schalter -ffp-contract=off verhindert FMA, damit die Bilder bitgenau bleiben. <https://gcc.gnu.org/>
 - **GIL (Global Interpreter Lock):** Sperre im Standard-Python: Nur ein Thread führt gleichzeitig Python-Code aus. Deshalb nutzt der Monitor für Python Prozesse statt Threads. <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>
+- **glibc:** Die C-Standardbibliothek von Linux. Fertige Programme laufen nur mit gleicher oder neuerer glibc, deshalb wird auf dem ältesten unterstützten System gebaut. <https://www.gnu.org/software/libc/>
 - **gmpy2 / GMP:** Bibliothek für sehr große Zahlen mit beliebig vielen Stellen; Grundlage der Pi-Berechnung. <https://gmpy2.readthedocs.io/>
 - **GPU (Grafikkarte):** Prozessor mit Tausenden einfacher Recheneinheiten; ideal, wenn sehr viele gleichartige Rechnungen anfallen (z. B. je Bildpunkt eine). <https://de.wikipedia.org/wiki/Grafikprozessor>
 - **Heatmap:** Farbige Kachelansicht: je Thread ein Feld, Farbe = aktuelle Auslastung. <https://de.wikipedia.org/wiki/Heatmap>
@@ -485,36 +546,45 @@ Alphabetisch, mit Link zu einer weiterführenden Quelle.
 - **Kardioide und Periode-2-Kreis:** Die herzförmige Hauptfläche und der große Kreis links davon gehören sicher zur Mandelbrot-Menge. Eine kurze Formel erkennt diese Punkte, ohne sie bis zur Höchstzahl durchzurechnen. <https://de.wikipedia.org/wiki/Kardioide>
 - **Kern (Prozessorkern):** Eigenständiges Rechenwerk im Prozessor. Der Threadripper 3960X hat 24 Kerne. <https://de.wikipedia.org/wiki/Mehrkernprozessor>
 - **Lastverteilung (dynamisch):** Wer mit seiner Kachel fertig ist, holt sich die nächste. So bleiben keine Kerne untätig, obwohl Kacheln unterschiedlich lange dauern. <https://de.wikipedia.org/wiki/Lastverteilung_(Informatik)>
+- **Linux (Debian / Ubuntu):** Freies Betriebssystem; der Kern-Monitor läuft auch unter Debian 12 und Ubuntu 22.04 oder neuer (start.sh). <https://de.wikipedia.org/wiki/Linux>
 - **Mandelbrot-Menge:** Bekanntes Fraktal: Für jeden Bildpunkt wird z → z² + c wiederholt, bis der Wert „entkommt“ oder die Höchstzahl erreicht ist. Jeder Punkt ist unabhängig – ideal für Parallelisierung. <https://de.wikipedia.org/wiki/Mandelbrot-Menge>
 - **Median:** Mittlerer Wert einer sortierten Messreihe; unempfindlicher gegen Ausreißer als der Durchschnitt. Wird bei mehreren Läufen gewertet. <https://de.wikipedia.org/wiki/Median>
 - **mpmath:** Python-Bibliothek für Rechnen mit beliebiger Genauigkeit; dient als unabhängige Gegenprobe für die Pi-Stellen. <https://mpmath.org/>
+- **NASM:** Netwide Assembler: freier x64-Assembler; unter Linux übersetzt er die handgeschriebene Rechenschleife (asm/kernel_nasm.asm). <https://www.nasm.us/>
+- **nice (Priorität):** Linux-Wert für die Priorität eines Prozesses; die Rechen-Worker laufen mit nice 5 bzw. 10, damit Browser und Server flüssig bleiben. <https://de.wikipedia.org/wiki/Nice_(Unix)>
 - **NUMA:** Non-Uniform Memory Access: Bei großen Systemen ist Speicher je nach Kern unterschiedlich schnell erreichbar. Der 3960X hat einen NUMA-Knoten. <https://de.wikipedia.org/wiki/Non-Uniform_Memory_Access>
 - **numba:** Übersetzt ausgewählte Python-Funktionen beim ersten Aufruf in Maschinencode (JIT) und macht sie so etwa so schnell wie C. <https://numba.pydata.org/>
 - **numpy:** Python-Bibliothek für Rechnen mit ganzen Zahlenfeldern (Arrays). Schnell bei einfachen Feldoperationen, aber nicht ideal für Mandelbrot. <https://numpy.org/>
 - **OpenBLAS:** Mathe-Bibliothek in numpy, die selbst Threads startet. Im Monitor auf 1 Thread je Prozess begrenzt, sonst braucht jeder Worker ~800 MB. <https://www.openblas.net/>
+- **OpenCL:** Offener Standard, um Programme auf Grafikkarten (und Prozessoren) laufen zu lassen; unter Linux der Weg zur GPU statt Direct3D. <https://www.khronos.org/opencl/>
 - **pip:** Paketverwaltung von Python; installiert Erweiterungen wie numba oder FastAPI. <https://pip.pypa.io/>
+- **POCL:** Portable Computing Language: OpenCL-Treiber, der auf dem Prozessor rechnet. Der automatische Test nutzt ihn als Ersatz-Grafikkarte. <https://portablecl.org/>
+- **POSIX-Threads (pthreads):** Standard-Schnittstelle für Threads unter Linux; das Gegenstück zu CreateThread unter Windows. <https://de.wikipedia.org/wiki/POSIX_Threads>
 - **ProcessPoolExecutor:** Python-Baustein, der einen Vorrat an Worker-Prozessen verwaltet und Aufgaben an sie verteilt. <https://docs.python.org/3/library/concurrent.futures.html>
 - **Prozess:** Laufendes Programm mit eigenem Speicher. Mehrere Prozesse laufen unabhängig, tauschen Daten aber nur über Umwege aus. <https://de.wikipedia.org/wiki/Prozess_(Informatik)>
 - **Prozessorgruppe:** Windows fasst höchstens 64 Threads zu einer Gruppe zusammen. Prozessoren mit mehr Threads haben mehrere Gruppen; ein Prozess läuft normalerweise nur in einer. <https://learn.microsoft.com/de-de/windows/win32/procthread/processor-groups>
 - **psutil:** Python-Bibliothek, die Auslastung, Speicher und Prozesse abfragt; liefert die Werte für die Kern-Anzeige. <https://psutil.readthedocs.io/>
 - **Python:** Verbreitete Skriptsprache; hier für Webserver, Steuerung und zwei Rechenverfahren. <https://www.python.org/>
+- **python-build-standalone:** Fertig übersetztes Python, das man ohne Installation in einen Ordner legen kann; steckt im Linux-Paket „Komplett“. <https://github.com/astral-sh/python-build-standalone>
 - **Quarantäne:** Abgeschotteter Bereich des Virenscanners für verdächtige Dateien; von dort lassen sie sich wiederherstellen. <https://de.wikipedia.org/wiki/Antivirenprogramm>
 - **Rust:** Moderne Systemsprache mit C-ähnlicher Geschwindigkeit; der Übersetzer verhindert typische Fehler beim Arbeiten mit Threads. <https://www.rust-lang.org/>
 - **rustup / cargo:** rustup installiert und aktualisiert Rust; cargo übersetzt Rust-Programme und lädt benötigte Bibliotheken. <https://rustup.rs/>
-- **Scheduler:** Teil von Windows, der entscheidet, welcher Thread wann auf welchem Kern läuft (Platzierung „Windows entscheidet“). <https://de.wikipedia.org/wiki/Prozess-Scheduler>
+- **Scheduler:** Teil des Betriebssystems, der entscheidet, welcher Thread wann auf welchem Kern läuft (Platzierung „Windows entscheidet“ bzw. „Linux entscheidet“). <https://de.wikipedia.org/wiki/Prozess-Scheduler>
 - **Seepferdchental:** Bekannter Ausschnitt der Mandelbrot-Menge zwischen Hauptfläche und Periode-2-Kreis; sehr fein verästelt und daher rechenaufwendig. <https://de.wikipedia.org/wiki/Mandelbrot-Menge>
-- **Self-contained Single-File:** .NET-Programm, das die Laufzeitumgebung in einer einzigen .exe mitbringt; läuft ohne installiertes .NET. <https://learn.microsoft.com/de-de/dotnet/core/deploying/single-file/overview>
+- **Self-contained Single-File:** .NET-Programm, das die Laufzeitumgebung in einer einzigen Datei mitbringt (unter Windows eine .exe); läuft ohne installiertes .NET. <https://learn.microsoft.com/de-de/dotnet/core/deploying/single-file/overview>
 - **SIMD:** Single Instruction, Multiple Data: Ein Befehl rechnet mehrere Zahlen gleichzeitig. <https://de.wikipedia.org/wiki/SIMD>
 - **Skalierung, Beschleunigung, Effizienz:** Beschleunigung = Zeit mit 1 Worker ÷ Zeit mit n Workern. Effizienz = Beschleunigung ÷ n (100 % = perfekt). <https://de.wikipedia.org/wiki/Speedup>
 - **SmartScreen:** Windows-Schutz, der vor unbekannten, nicht signierten Programmen warnt („Der Computer wurde durch Windows geschützt“). <https://learn.microsoft.com/de-de/windows/security/operating-system-security/virus-and-threat-protection/microsoft-defender-smartscreen/>
 - **SMT (Simultaneous Multithreading, bei Intel „Hyper-Threading“):** Ein Kern bearbeitet zwei Befehlsströme gleichzeitig und füllt damit Lücken in seinen Rechenwerken. Bringt meist 0–30 %, nicht 100 %. <https://de.wikipedia.org/wiki/Simultaneous_Multithreading>
-- **Thread (Hardware-Thread, logischer Prozessor):** Was Windows als „CPU“ zählt. Mit SMT bietet jeder Kern 2 Threads, also 48 beim 3960X. <https://de.wikipedia.org/wiki/Thread_(Informatik)>
+- **Thread (Hardware-Thread, logischer Prozessor):** Was das Betriebssystem (Windows, Linux) als „CPU“ zählt. Mit SMT bietet jeder Kern 2 Threads, also 48 beim 3960X. <https://de.wikipedia.org/wiki/Thread_(Informatik)>
 - **Thread (Software):** Ausführungsstrang innerhalb eines Prozesses; alle Threads teilen sich den Speicher und starten viel schneller als Prozesse. <https://de.wikipedia.org/wiki/Thread_(Informatik)>
 - **vcomp140.dll / OpenMP:** OpenMP ist ein Standard, mit dem C/C++-Programme Schleifen auf Threads verteilen; vcomp140.dll ist Microsofts Laufzeitbibliothek dafür und liegt dem Paket bei. <https://learn.microsoft.com/de-de/cpp/parallel/openmp/openmp-in-visual-cpp>
 - **Vector256:** .NET-Datentyp für ein 256-Bit-Register (4 double); damit nutzt C# AVX2. <https://learn.microsoft.com/de-de/dotnet/api/system.runtime.intrinsics.vector256>
+- **venv (Python-Umgebung):** Eigener Ordner mit Python-Paketen nur für ein Programm (.venv); start.sh installiert dort, das System-Python bleibt unverändert. <https://docs.python.org/3/library/venv.html>
 - **VirusTotal:** Kostenloser Dienst, der eine Datei mit rund 70 Virenscannern gleichzeitig prüft. <https://www.virustotal.com/>
 - **Visual Studio Build Tools:** Microsofts Compiler für C, C++ und Assembler ohne die volle Entwicklungsumgebung; kostenlos. <https://visualstudio.microsoft.com/de/downloads/>
 - **WebSocket:** Dauerhafte Verbindung zwischen Browser und Server; darüber kommen die Auslastungswerte jede Sekunde ohne Neuladen. <https://de.wikipedia.org/wiki/WebSocket>
 - **winget:** Paketverwaltung von Windows; installiert Programme wie Python, .NET oder Rust per Befehlszeile. <https://learn.microsoft.com/de-de/windows/package-manager/winget/>
 - **Worker:** Ein Prozess oder Thread, der Kacheln abarbeitet. Die Worker-Zahl stellt man im Monitor ein (1–48).
+- **WSL (Windows-Subsystem für Linux):** Linux direkt unter Windows; der Kern-Monitor läuft darin, aber ohne Zugriff auf die Grafikkarte über OpenCL. <https://learn.microsoft.com/de-de/windows/wsl/>
 - **x64:** 64-Bit-Befehlssatz der heutigen Intel- und AMD-Prozessoren (auch x86-64 oder AMD64). <https://de.wikipedia.org/wiki/X64>

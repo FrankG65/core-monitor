@@ -13,5 +13,9 @@ for var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA
     os.environ.setdefault(var, "1")
 
 if __name__ == "__main__":
+    # Linux would otherwise copy the running web server into every worker ("fork", unsafe with its threads).
+    # "spawn" starts every worker as a fresh Python - the same behaviour as on Windows.
+    import multiprocessing
+    multiprocessing.set_start_method("spawn", force=True)
     import app
     app.main()

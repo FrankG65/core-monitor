@@ -3,6 +3,7 @@
 #                    embedded Python with all packages, all computation methods precompiled
 #                    (C, C++, assembler, GPU shaders, Rust, C# as a self-contained .exe).
 #   -Variante Lite : source code and instructions only (INSTALLATION.txt); the target PC installs what it needs.
+#   (Linux packages: tools/export.sh, see export_full.sh / export_lite.sh.)
 #   (The German names Komplett / Klein are accepted as aliases.)
 # Own measurements (benchmarks), settings (.claude), logs and intermediate files are NOT included.
 param([ValidateSet("Full", "Lite", "Komplett", "Klein")][string]$Variante = "Full")
@@ -33,16 +34,19 @@ New-Item -ItemType Directory -Force $work | Out-Null
 
 # ---- Source code (both variants) ----
 $files = @("server.py", "app.py", "i18n.py", "security.py", "mandelbrot.py", "pi.py", "hardware.py", "worker_util.py", "lastgen.py",
-           "requirements.txt", "start.bat", "README.md", "README.de.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
+           "requirements.txt", "start.bat", "start.sh", "README.md", "README.de.md", "LICENSE", "THIRD_PARTY_NOTICES.md",
            "static\index.html", "static\app.js", "static\mandel.js", "static\pi.js", "static\style.css",
            "csharp\MandelBench\Program.cs", "csharp\MandelBench\MandelBench.csproj",
            "rust\mandelbench\Cargo.toml", "rust\mandelbench\src\main.rs", "rust\mandelbench\.cargo\config.toml",
-           "native\mandel_core.h", "native\build.bat", "native\c\mandel.c", "native\cpp\mandel.cpp",
-           "native\asm\kernel.asm", "native\gpu\mandel.hlsl", "native\gpu\mandel_gpu.cpp",
+           "native\mandel_core.h", "native\platform.h", "native\build.bat", "native\build.sh",
+           "native\c\mandel.c", "native\cpp\mandel.cpp", "native\asm\kernel.asm", "native\asm\kernel_nasm.asm",
+           "native\gpu\mandel.hlsl", "native\gpu\mandel_gpu.cpp", "native\gpu\mandel.cl", "native\gpu\mandel_opencl.cpp",
            "tools\export.ps1", "tools\privacy_check.py", "tools\glossar.py", "tools\selftest.py", "tools\collect_licenses.py",
            "tools\INSTALLATION_Full.txt", "tools\INSTALLATION_Lite.txt",
            "tools\INSTALLATION_Komplett.txt", "tools\INSTALLATION_Klein.txt",
-           "export_full.bat", "export_lite.bat")
+           "tools\export.sh", "tools\INSTALLATION_LINUX_Full.txt", "tools\INSTALLATION_LINUX_Lite.txt",
+           "tools\INSTALLATION_LINUX_Komplett.txt", "tools\INSTALLATION_LINUX_Klein.txt",
+           "export_full.bat", "export_lite.bat", "export_full.sh", "export_lite.sh")
 foreach ($f in $files) { CopyItem $f }
 foreach ($pdf in "Project_Report_Core_Monitor.pdf", "Projektbericht_Parallelisierung.pdf") {
     if (Test-Path (Join-Path $root $pdf)) { CopyItem $pdf }

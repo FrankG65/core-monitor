@@ -69,11 +69,15 @@ def engine_status() -> dict:
             reason = L("CPU hat kein AVX2", "CPU has no AVX2")
         elif e.startswith("gpu"):
             if not hardware.GPU_PROBE.exists():
-                reason = L("GPU-Programm nicht übersetzt (Visual Studio fehlt?)",
-                           "GPU program not built (Visual Studio missing?)")
+                reason = (L("GPU-Programm nicht übersetzt (Visual Studio fehlt?)", "GPU program not built (Visual Studio missing?)")
+                          if os.name == "nt" else
+                          L("GPU-Programm nicht übersetzt (sudo apt install ocl-icd-opencl-dev)",
+                            "GPU program not built (sudo apt install ocl-icd-opencl-dev)"))
             elif gpu is None:
-                reason = L("keine Grafikkarte mit Direct3D-11-Compute gefunden",
-                           "no graphics card with Direct3D 11 compute found")
+                reason = (L("keine Grafikkarte mit Direct3D-11-Compute gefunden", "no graphics card with Direct3D 11 compute found")
+                          if os.name == "nt" else
+                          L("keine Grafikkarte mit OpenCL-Treiber gefunden (siehe INSTALLATION_LINUX.de.txt)",
+                            "no graphics card with an OpenCL driver found (see INSTALLATION_LINUX.txt)"))
             elif e == "gpu" and not gpu.get("double"):
                 reason = L("Grafikkarte kann kein double im Shader", "graphics card cannot do double in shaders")
         out[e] = reason
@@ -250,7 +254,7 @@ async def _sample_once():
 
 
 async def open_browser_if_needed():
-    """Open a browser tab only if no page is open (start.bat sets OPEN_BROWSER=1).
+    """Open a browser tab only if no page is open (start.bat / start.sh set OPEN_BROWSER=1).
 
     Open pages reconnect within ~1 s after a restart and reload themselves –
     an additional tab would then be superfluous.
@@ -267,7 +271,13 @@ async def open_browser_if_needed():
     else:
         import webbrowser
         print(L("Keine offene Seite – öffne", "No open page – opening"), url)
-        webbrowser.open(url)
+        if not webbrowser.open(url) and os.name != "nt":
+            # Linux without a desktop browser - e.g. WSL: open the Windows browser (shares 127.0.0.1 with WSL)
+            try:
+                import subprocess
+                subprocess.Popen(["cmd.exe", "/c", "start", "", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                print(L("Bitte im Browser öffnen:", "Please open in your browser:"), url)
 
 
 @asynccontextmanager
@@ -361,7 +371,7 @@ def info():
             "engines": available_engines(), "engines_off": {e: r for e, r in engine_status().items() if r},
             "regions": mandelbrot.REGIONS, "bench_workers": BENCH_STEPS,
             "placements": placements(), "orders": mandelbrot.orders(), "system": system_info(),
-            "lang": get_lang()}
+            "lang": get_lang(), "os": "windows" if os.name == "nt" else "linux"}
 
 
 class LangRequest(BaseModel):

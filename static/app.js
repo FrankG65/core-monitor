@@ -122,7 +122,7 @@ function applySystem(inf) {
     row(L("Befehlssätze", "Instruction sets"), feats + (isa.avx2 ? "" : L(" – SIMD-Rechenverfahren nicht verfügbar", " – SIMD computation methods not available"))) +
     row(L("Arbeitsspeicher", "Memory (RAM)"), `${nf(cpu.ram_gb)} GB`) +
     row(L("Grafikkarten", "Graphics cards"), sys.gpus.length ? sys.gpus.map((g) => `${g.name}${g.software ? " (Software)" : ""}: ` +
-      `${g.vram_mb ? (g.vram_mb / 1024).toFixed(0) + " GB, " : ""}${L("Feature-Level", "feature level")} ${g.feature_level}, ` +
+      `${g.vram_mb ? (g.vram_mb / 1024).toFixed(0) + " GB, " : ""}${g.api ? g.api : L("Feature-Level ", "feature level ") + g.feature_level}, ` +
       `double ${g.double ? L("ja", "yes") : L("nein", "no")}` +
       `${g.index === sys.gpu_default ? L(" <b>– wird verwendet</b>", " <b>– in use</b>") : ""}`).join("<br>") : L("keine gefunden", "none found")) +
     row(L("Skalierungsstufen", "Scaling steps"), sys.bench_steps.join(" · ")) +
@@ -260,22 +260,45 @@ function spark(t) {
   g.globalAlpha = 0.15; g.fillStyle = css(last); g.fill(); g.globalAlpha = 1;
 }
 
-// Labels on the left (CCX or groups with thread range) and separator lines between the groups
-function heatLabels(h) {
-  const groups = info.l3.length ? info.l3 : topo.reduce((acc, c, i) => {
+// Heatmap rows in topology order: group by group, core by core. On Windows this is simply 0, 1, 2, …; Linux
+// often numbers the second SMT threads separately (AMD: core 0 = threads 0 and 24), so the rows are rearranged.
+let heatRow = [];
+function heatGroups() {
+  const groups = info.l3.length ? info.l3.map((lps) => topo.filter((c) => lps.includes(c[0])).flat()) : [];
+  if (groups.flat().length === n) return groups;
+  return topo.reduce((acc, c, i) => {   // without L3 data: 4 cores per group
     if (i % 4 === 0) acc.push([]);
     acc[acc.length - 1].push(...c);
     return acc;
   }, []);
+}
+// thread numbers as compact ranges: [0,1,2,24,25,26] -> "0–2, 24–26"
+function ranges(lps) {
+  const s = [...lps].sort((a, b) => a - b), out = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    out.push(i === j ? `${s[i]}` : `${s[i]}–${s[j]}`);
+    i = j;
+  }
+  return out.join(", ");
+}
+
+// Labels on the left (CCX or groups with thread range) and separator lines between the groups
+function heatLabels(h) {
+  const groups = heatGroups();
+  heatRow = new Array(n);
+  groups.flat().forEach((lp, r) => heatRow[lp] = r);
   const row = h / n, rows = $("heat-rows"), lines = $("heat-lines");
   rows.style.height = h + "px"; lines.style.height = h + "px";
+  let start = 0;
   groups.forEach((lps, gi) => {
-    const lo = Math.min(...lps), hi = Math.max(...lps);
     const s = document.createElement("span");
-    s.style.top = (lo + (hi - lo + 1) / 2) * row - 7 + "px";
-    s.textContent = `${info.l3.length ? "CCX" : L("Gruppe", "Group")} ${gi} · T ${lo}–${hi}`;
+    s.style.top = (start + lps.length / 2) * row - 7 + "px";
+    s.textContent = `${info.l3.length ? "CCX" : L("Gruppe", "Group")} ${gi} · T ${ranges(lps)}`;
     rows.appendChild(s);
-    if (lo > 0) { const l = document.createElement("i"); l.style.top = lo * row + "px"; lines.appendChild(l); }
+    if (start > 0) { const l = document.createElement("i"); l.style.top = start * row + "px"; lines.appendChild(l); }
+    start += lps.length;
   });
 }
 
@@ -285,7 +308,7 @@ function drawHeat() {
   const off = HIST - history.length;
   history.forEach((row, x) => {
     row.forEach((v, y) => {
-      const [r, gg, b] = color(v), p = (y * HIST + x + off) * 4;
+      const [r, gg, b] = color(v), p = ((heatRow[y] ?? y) * HIST + x + off) * 4;
       img.data[p] = r; img.data[p + 1] = gg; img.data[p + 2] = b; img.data[p + 3] = 255;
     });
   });

@@ -3,5 +3,7 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+# Linux shell scripts keep LF line endings (sh cannot run scripts with CRLF), also in a Windows checkout
+*.sh text eol=lf
 *.pdf binary
 *.png binary

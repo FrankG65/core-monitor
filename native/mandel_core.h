@@ -2,7 +2,8 @@
  * Same tile layout, same formula (smoothed iteration count, escape radius 16) and same color palette
  * as mandelbrot.py, C# and Rust; same protocol (see csharp/MandelBench/Program.cs).
  *
- * Compiled with /O2 /fp:precise (without /arch:AVX2, see build.bat; AVX2 is checked at runtime):
+ * Compiled with /O2 /fp:precise (MSVC, build.bat) or -O2 -ffp-contract=off (GCC, build.sh), without a global AVX2 switch
+ * (AVX2 is checked at runtime):
  * no contracted multiply/add operations (FMA), so that every pixel matches the other languages bit for bit.
  */
 #pragma once
@@ -34,6 +35,14 @@ typedef struct { int index, x, y, w, h; } Tile;
 static int cpu_has_avx2(void) { return IsProcessorFeaturePresent(PF_AVX2_INSTRUCTIONS_AVAILABLE) != 0; }
 #else
 static int cpu_has_avx2(void) { return __builtin_cpu_supports("avx2"); }
+#endif
+
+/* GCC/Clang: compile only the AVX2 kernel for AVX2 (the rest of the program stays plain x86-64) -
+ * the MSVC equivalent needs no attribute. */
+#if defined(__GNUC__) || defined(__clang__)
+#define KM_TARGET_AVX2 __attribute__((target("avx2")))
+#else
+#define KM_TARGET_AVX2
 #endif
 
 /* ---- tiny JSON reader for the flat configuration ---- */
@@ -171,7 +180,7 @@ static void render_scalar(const Tile *t, const Config *c, unsigned char *rgb, in
 typedef void (*Kernel4)(const double *cr, const double *ci, int max_iter, int64_t *esc_it, double *esc_r2, unsigned active);
 
 /* AVX2 with intrinsics (C/C++). Same operations in the same order as scalar, no FMA. */
-static void kernel4_intrin(const double *cr4, const double *ci4, int max_iter, int64_t *esc_it, double *esc_r2, unsigned active) {
+KM_TARGET_AVX2 static void kernel4_intrin(const double *cr4, const double *ci4, int max_iter, int64_t *esc_it, double *esc_r2, unsigned active) {
     __m256d cr = _mm256_loadu_pd(cr4), ci = _mm256_loadu_pd(ci4);
     __m256d zr = _mm256_setzero_pd(), zi = _mm256_setzero_pd();
     const __m256d limit = _mm256_set1_pd(256.0), two = _mm256_set1_pd(2.0);
@@ -214,7 +223,9 @@ static void render_simd(const Tile *t, const Config *c, Kernel4 k4, unsigned cha
                 if (c->cardioid && in_main_bulbs(cr[l], ci[l])) active &= ~(1u << l);   /* certainly inside the set */
             }
             k4(cr, ci, c->max_iter, esc, r2, active);
+#ifdef _MSC_VER
 #pragma loop(no_vector)   /* do not turn into vector math functions: those would differ in the last digit */
+#endif
             for (int l = 0; l < 4; l++) store_px(rgb, (y * t->w + x + l) * 3, smooth(esc[l], r2[l]), inside, sum);
         }
         for (; x < t->w; x++) {   /* remainder of a row: scalar */

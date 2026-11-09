@@ -1,6 +1,8 @@
 // Mandelbrot: controls, drawing tiles live, scaling test with chart
 
-// The 13 computation methods: name, kind (short form for the selection), description, short name for the chart
+// The 13 computation methods: name, kind (short form for the selection), description, short name for the chart.
+// OS_LINUX: the server runs on Linux (POSIX threads, NASM, OpenCL instead of Win32 threads, MASM, Direct3D)
+const OS_LINUX = () => typeof info !== "undefined" && info && info.os === "linux";
 const ENGINE_INFO = {
   numba:       { name: "Python + numba", kind: L("Prozesse, 1 Pixel je Schritt", "processes, 1 pixel per step"), short: "numba",
                  desc: L("Python, von numba in Maschinencode übersetzt. Wegen des GIL rechnet je Kern ein eigener Prozess; jeder rechnet einen Bildpunkt nach dem anderen.",
@@ -21,8 +23,10 @@ const ENGINE_INFO = {
                  desc: L("Rust, jeder Thread rechnet 4 Bildpunkte gleichzeitig mit AVX2-Befehlen.",
                          "Rust, each thread computes 4 pixels at once with AVX2 instructions.") },
   c:           { name: "C", kind: L("Threads, 1 Pixel je Schritt", "threads, 1 pixel per step"), short: "C",
-                 desc: L("C mit Windows-Threads (CreateThread); Bildpunkt für Bildpunkt.",
-                         "C with Windows threads (CreateThread); pixel by pixel.") },
+                 get desc() { return OS_LINUX() ? L("C mit POSIX-Threads (pthread_create); Bildpunkt für Bildpunkt.",
+                                                    "C with POSIX threads (pthread_create); pixel by pixel.")
+                                                : L("C mit Windows-Threads (CreateThread); Bildpunkt für Bildpunkt.",
+                                                    "C with Windows threads (CreateThread); pixel by pixel."); } },
   c_simd:      { name: "C + SIMD", kind: L("Threads, 4 Pixel gleichzeitig", "threads, 4 pixels at once"), short: "C SIMD",
                  desc: L("C, jeder Thread rechnet 4 Bildpunkte gleichzeitig (AVX2-Intrinsics).",
                          "C, each thread computes 4 pixels at once (AVX2 intrinsics).") },
@@ -36,8 +40,9 @@ const ENGINE_INFO = {
                  desc: L("Handgeschriebener x64-Assembler (AVX2, 4 Bildpunkte gleichzeitig) für die innere Schleife; Threads und Ein-/Ausgabe in C.",
                          "Hand-written x64 assembler (AVX2, 4 pixels at once) for the inner loop; threads and input/output in C.") },
   gpu:         { name: "GPU (double)", kind: L("Grafikkarte, doppelte Genauigkeit", "graphics card, double precision"), short: "GPU double",
-                 desc: L("Grafikkarte über einen Direct3D-Compute-Shader: Tausende GPU-Recheneinheiten, je Bildpunkt eine. Doppelte Genauigkeit wie die CPU, trotzdem weichen einzelne Pixel ab (der Grafiktreiber übersetzt den Shader auf eigene Weise); auf Spiele-Grafikkarten langsam.",
-                         "Graphics card via a Direct3D compute shader: thousands of GPU compute units, one per pixel. Double precision like the CPU, yet individual pixels still differ (the graphics driver compiles the shader in its own way); slow on gaming graphics cards.") },
+                 get desc() { const api = OS_LINUX() ? L("einen OpenCL-Kernel", "an OpenCL kernel") : L("einen Direct3D-Compute-Shader", "a Direct3D compute shader");
+                   return L(`Grafikkarte über ${api}: Tausende GPU-Recheneinheiten, je Bildpunkt eine. Doppelte Genauigkeit wie die CPU, trotzdem weichen einzelne Pixel ab (der Grafiktreiber übersetzt das Programm auf eigene Weise); auf Spiele-Grafikkarten langsam.`,
+                            `Graphics card via ${api}: thousands of GPU compute units, one per pixel. Double precision like the CPU, yet individual pixels still differ (the graphics driver compiles the program in its own way); slow on gaming graphics cards.`); } },
   gpu_float:   { name: "GPU (float)", kind: L("Grafikkarte, einfache Genauigkeit", "graphics card, single precision"), short: "GPU float",
                  desc: L("Wie GPU (double), aber mit einfacher Genauigkeit: viel schneller, das Bild weicht leicht ab (in tiefen Zooms deutlich).",
                          "Like GPU (double), but with single precision: much faster, the image differs slightly (clearly in deep zooms).") },
@@ -270,7 +275,7 @@ const langColor = (engine) => `var(--s${LANGS.indexOf(engine.replace("_simd", ""
 const SERIES_COLORS = LANGS.flatMap((l) => [`${l}|windows|zeilen|0`, `${l}_simd|windows|zeilen|0`,
   `${l}|windows|zeilen|1`, `${l}_simd|windows|zeilen|1`]);  // sort order
 const seriesKey = (p) => `${p.engine}|${p.placement || "windows"}|${p.order || "zeilen"}|${p.cardioid ? 1 : 0}`;
-const PLACE_SHORT = { windows: "Windows", verteilt: L("1 Thread/Kern", "1 thread/core"), kompakt: L("kompakt", "compact") };
+const PLACE_SHORT = { get windows() { return OS_LINUX() ? "Linux" : "Windows"; }, verteilt: L("1 Thread/Kern", "1 thread/core"), kompakt: L("kompakt", "compact") };
 const seriesName = (p) => `${(M.enames && M.enames[p.engine]) || p.engine} · ${PLACE_SHORT[p.placement || "windows"]}` +
   ` · ${p.order === "teuer" ? L("aufwendige zuerst", "demanding first") : L("zeilenweise", "row by row")}` +
   `${p.cardioid ? L(" · Kardioide übersprungen", " · cardioid skipped") : ""}`;

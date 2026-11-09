@@ -1,0 +1,45 @@
+KERN-MONITOR (Core Monitor) – Paket "Full" (Komplett) für Linux (Debian / Ubuntu)
+=================================================================================
+
+Dieses Paket läuft unter Debian 12 / Ubuntu 22.04 oder neuer (x86-64, 64-Bit-PC) OHNE Installation, OHNE Internet und
+OHNE Administratorrechte (sudo). Alles Nötige ist enthalten:
+  - Python 3.11 (python-build-standalone) mit allen Paketen (FastAPI, numpy, numba, gmpy2, mpmath, …) -> Ordner python/
+  - alle Rechenverfahren fertig übersetzt:
+      C, C++, Assembler, GPU-Programm (OpenCL)                   -> native/bin/
+      Rust                                                       -> rust/mandelbench/target/release/
+      C# als eigenständiges Programm (kein .NET nötig)           -> csharp/bin/
+  - der Quelltext aller Teile (zum Nachlesen und Weiterentwickeln)
+
+STARTEN
+-------
+1. Archiv entpacken, z. B.:     tar xzf CoreMonitor_Full_Linux_<Datum>.tar.gz
+2. Im entpackten Ordner:        ./start.sh
+3. Der Browser öffnet http://127.0.0.1:8000 - falls nicht, die Adresse selbst eingeben.
+   Ist schon eine Seite offen, lädt sie sich nach einem Neustart selbst neu (kein zusätzlicher Tab).
+Beenden: Strg+C im Terminal.
+
+Der Server ist nur von diesem PC aus erreichbar (127.0.0.1), nicht aus dem Netzwerk.
+Anderer Port:  PORT=8001 ./start.sh
+
+WAS DER PC BRAUCHT
+------------------
+- Debian 12 / Ubuntu 22.04 oder neuer (oder ein anderes Linux mit glibc 2.35 oder neuer), x86-64.
+- Für die GPU-Rechenverfahren: eine Grafikkarte mit OpenCL-Treiber (NVIDIA: Hersteller-Treiber; AMD: ROCm;
+  Intel: intel-opencl-icd) und den OpenCL-Lader (Paket ocl-icd-libopencl1, meist mit dem Treiber installiert).
+  Prüfen: clinfo -l. Ohne das sind diese Einträge ausgegraut. In WSL sind die GPU-Einträge immer ausgegraut.
+- Für die SIMD-Rechenverfahren und Assembler: eine CPU mit AVX2 (fast alle seit ca. 2015). Sonst ausgegraut.
+Die Seite erkennt CPU und Grafikkarte beim Start und zeigt alles unter "System".
+
+HINWEISE
+--------
+- Beim allerersten Start übersetzt numba seine Rechenroutine einmal (einige Sekunden).
+- Messergebnisse werden im Ordner benchmarks/ gespeichert (CSV für Tabellenkalkulationen und JSON).
+- Das Paket lässt sich auf einem Linux-PC mit ./export_full.sh neu bauen (siehe README.de.md).
+- Sprache: oben auf der Seite DE | EN umschalten (Standard = Englisch; die Wahl wird gemerkt).
+  Startsprache des Servers:  KM_LANG=de ./start.sh
+- Beschreibung und Projektbericht liegen in beiden Sprachen bei: README.de.md / README.md,
+  Projektbericht_Parallelisierung.pdf (deutsch) / Project_Report_Core_Monitor.pdf (englisch).
+- Fachbegriffe (numba, SIMD, CCX, OpenCL ...) erklärt README.de.md im Abschnitt "Glossar", mit Links.
+- Ein roter Hinweis oben auf der Seite bedeutet: Der Server hat Anfragen von außen abgewiesen (z. B. von einer
+  fremden Webseite). Ausgeführt wurde nichts; Einzelheiten in logs/security.log. Lizenztexte: LICENSE,
+  THIRD_PARTY_NOTICES.md, licenses/.

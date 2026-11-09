@@ -1,10 +1,12 @@
-"""Collects the license texts of all bundled third-party components into <package>/licenses/ (used by export.ps1).
+"""Collects the license texts of all bundled third-party components into <package>/licenses/
+(used by export.ps1 on Windows and export.sh on Linux).
 
     python tools\\collect_licenses.py <package folder>
 
-- Python packages: every license file from python/Lib/site-packages/*.dist-info -> licenses/python-packages/<name>-<version>/
-- Python itself: python/LICENSE.txt -> licenses/python/
-- .NET runtime (inside csharp/bin/MandelBench.exe): LICENSE.txt and ThirdPartyNotices.txt of the local .NET installation
+- Python packages: every license file from the *.dist-info folders of site-packages
+  (Windows: python/Lib/site-packages, Linux: python/lib/python3.x/site-packages) -> licenses/python-packages/<name>-<version>/
+- Python itself: python/LICENSE.txt (Windows) or python/lib/python3.x/LICENSE.txt (Linux) -> licenses/python/
+- .NET runtime (inside csharp/bin/MandelBench[.exe]): LICENSE.txt and ThirdPartyNotices.txt of the local .NET installation
 - Rust standard library (inside mandelbench.exe): COPYRIGHT and the MIT / Apache-2.0 texts of the Rust toolchain
 Missing sources are reported but do not stop the export (see THIRD_PARTY_NOTICES.md for links).
 """
@@ -32,7 +34,8 @@ def copy(src: Path, dst: Path):
 
 
 # Python packages
-for d in sorted((pkg / "python" / "Lib" / "site-packages").glob("*.dist-info")):
+site_packages = [pkg / "python" / "Lib" / "site-packages", *sorted((pkg / "python" / "lib").glob("python3*/site-packages"))]
+for d in sorted(d for sp in site_packages for d in sp.glob("*.dist-info")):
     m = email.message_from_string((d / "METADATA").read_text(encoding="utf-8", errors="replace"))
     target = out / "python-packages" / f"{m['Name']}-{m['Version']}"
     for f in d.rglob("*"):
@@ -40,8 +43,10 @@ for d in sorted((pkg / "python" / "Lib" / "site-packages").glob("*.dist-info")):
             copy(f, target / f.relative_to(d))
 
 # Python itself
-if (pkg / "python" / "LICENSE.txt").exists():
-    copy(pkg / "python" / "LICENSE.txt", out / "python" / "LICENSE.txt")
+for lic in [pkg / "python" / "LICENSE.txt", *sorted((pkg / "python" / "lib").glob("python3*/LICENSE.txt"))]:
+    if lic.exists():
+        copy(lic, out / "python" / "LICENSE.txt")
+        break
 
 # .NET runtime
 dotnet = shutil.which("dotnet")
@@ -54,7 +59,7 @@ else:
     print("collect_licenses: .NET not found - license text not copied")
 
 # Rust standard library
-rustc = shutil.which("rustc") or str(Path.home() / ".cargo" / "bin" / "rustc.exe")
+rustc = shutil.which("rustc") or str(Path.home() / ".cargo" / "bin" / ("rustc.exe" if sys.platform == "win32" else "rustc"))
 try:
     sysroot = Path(subprocess.run([rustc, "--print", "sysroot"], capture_output=True, text=True, check=True).stdout.strip())
     doc = sysroot / "share" / "doc" / "rust"

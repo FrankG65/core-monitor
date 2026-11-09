@@ -44,7 +44,7 @@ var sync = new object();
 void Worker(int index)
 {
     if (cfg.Affinity is { Length: > 0 } aff)
-        Native.SetThreadAffinityMask(Native.GetCurrentThread(), (UIntPtr)(1UL << aff[index % aff.Length]));
+        Native.Pin(aff[index % aff.Length]);
     long myInside = 0;
     double mySum = 0, myCpu = 0;
     int k;
@@ -59,7 +59,7 @@ void Worker(int index)
         if (cfg.EmitTiles)
         {
             byte[] head = Encoding.ASCII.GetBytes(FormattableString.Invariant(
-                $"B {t.Index} {index} {Native.GetCurrentProcessorNumber()} {Math.Round(sec * 1000, 1)} {rgb.Length}\n"));
+                $"B {t.Index} {index} {Native.CurrentCpu()} {Math.Round(sec * 1000, 1)} {rgb.Length}\n"));
             lock (sync)
             {
                 stdout.Write(head);
@@ -224,9 +224,33 @@ static class Mandel
     }
 }
 
+// Operating-system calls: Windows (kernel32) or Linux (C library). The functions are only looked up when called,
+// so the Linux functions are never needed on Windows and vice versa.
 static class Native
 {
-    [DllImport("kernel32.dll")] public static extern IntPtr GetCurrentThread();
-    [DllImport("kernel32.dll")] public static extern UIntPtr SetThreadAffinityMask(IntPtr thread, UIntPtr mask);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentProcessorNumber();
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentThread();
+    [DllImport("kernel32.dll")] static extern UIntPtr SetThreadAffinityMask(IntPtr thread, UIntPtr mask);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentProcessorNumber();
+    // Linux: pid 0 = the calling thread; the mask is a cpu_set_t (1024 bits = 16 x 64 bits)
+    [DllImport("libc", SetLastError = true)] static extern int sched_setaffinity(int pid, IntPtr size, ulong[] mask);
+    [DllImport("libc")] static extern int sched_getcpu();
+
+    public static void Pin(int cpu)
+    {
+        if (OperatingSystem.IsWindows())
+            SetThreadAffinityMask(GetCurrentThread(), (UIntPtr)(1UL << cpu));
+        else if (OperatingSystem.IsLinux() && cpu < 1024)
+        {
+            var mask = new ulong[16];
+            mask[cpu / 64] = 1UL << (cpu % 64);
+            sched_setaffinity(0, (IntPtr)(mask.Length * 8), mask);
+        }
+    }
+
+    public static uint CurrentCpu()
+    {
+        if (OperatingSystem.IsWindows()) return GetCurrentProcessorNumber();
+        if (OperatingSystem.IsLinux()) { int c = sched_getcpu(); return c < 0 ? 0u : (uint)c; }
+        return 0;
+    }
 }

@@ -45,7 +45,8 @@ def write_summary():
     target = os.environ.get("GITHUB_STEP_SUMMARY")
     if not target:
         return
-    lines = ["## Core Monitor self-test: " + ("all checks passed ✅" if not failures else f"{len(failures)} check(s) failed ❌"), ""]
+    system = "Windows" if os.name == "nt" else "Linux"
+    lines = [f"## Core Monitor self-test ({system}): " + ("all checks passed ✅" if not failures else f"{len(failures)} check(s) failed ❌"), ""]
     lines += [f"- {n}" for n in notes] + ["", "| Section | Check | Result |", "|---|---|---|"]
     lines += [f"| {s} | {txt.replace('|', '/')} | {'✅' if ok else '❌'} |" for s, ok, txt in results]
     with open(target, "a", encoding="utf-8") as f:
@@ -146,8 +147,14 @@ def privacy():
             dst = Path(tmp) / f
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / f, dst)
-        patterns = [p for p in (os.environ.get("USERPROFILE"), os.environ.get("COMPUTERNAME") and os.environ["COMPUTERNAME"] + ".",
-                                os.environ.get("USERNAME") and "\\Users\\" + os.environ["USERNAME"] + "\\", str(ROOT)) if p]
+        if os.name == "nt":
+            patterns = [os.environ.get("USERPROFILE"), os.environ.get("COMPUTERNAME") and os.environ["COMPUTERNAME"] + ".",
+                        os.environ.get("USERNAME") and "\\Users\\" + os.environ["USERNAME"] + "\\"]
+        else:   # Linux: home folder, user name in paths, computer name (only if distinctive enough)
+            host = socket.gethostname()
+            patterns = [os.environ.get("HOME") if os.environ.get("HOME") not in ("/", "/root") else None,
+                        os.environ.get("USER") and "/home/" + os.environ["USER"] + "/", host if len(host) >= 6 else None]
+        patterns = [p for p in (*patterns, str(ROOT)) if p]
         r = subprocess.run([sys.executable, str(ROOT / "tools" / "privacy_check.py"), tmp, *patterns], capture_output=True, text=True)
         print("        " + (r.stdout.strip().splitlines() or [""])[-1])
         check(r.returncode == 0, f"privacy check on {len([f for f in files if f])} tracked files")
@@ -207,7 +214,8 @@ def main():
             ok = not s.get("error") and s.get("done") == s.get("total", -1) > 0
             if e == "numba" or ref is None:
                 ref = ref or h
-            gpu = e.startswith("gpu")
+            # GPU may differ slightly - except GPU double on POCL (OpenCL on the CPU, Linux test): bit-identical there
+            gpu = e.startswith("gpu") and not (e == "gpu" and os.environ.get("KM_OPENCL_CPU") == "1")
             same = h == ref
             check(ok and (same or gpu), f"{e}: {s.get('done')}/{s.get('total')} tiles, "
                   + ("bit-identical to numba" if same else "differs slightly (GPU, expected)" if gpu else "DIFFERS from numba")

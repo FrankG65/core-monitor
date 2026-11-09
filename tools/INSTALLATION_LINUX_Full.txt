@@ -1,0 +1,44 @@
+CORE MONITOR – "Full" package for Linux (Debian / Ubuntu)
+=========================================================
+
+This package runs on Debian 12 / Ubuntu 22.04 or newer (x86-64, 64-bit PC) WITHOUT installation, WITHOUT internet and
+WITHOUT administrator rights (sudo). Everything needed is included:
+  - Python 3.11 (python-build-standalone) with all packages (FastAPI, numpy, numba, gmpy2, mpmath, …) -> folder python/
+  - all computation methods precompiled:
+      C, C++, assembler, GPU program (OpenCL)                    -> native/bin/
+      Rust                                                       -> rust/mandelbench/target/release/
+      C# as a self-contained program (no .NET needed)            -> csharp/bin/
+  - the source code of all parts (to read and develop further)
+
+STARTING
+--------
+1. Extract the archive, e.g.:   tar xzf CoreMonitor_Full_Linux_<date>.tar.gz
+2. In the extracted folder:     ./start.sh
+3. The browser opens http://127.0.0.1:8000 - if not, enter this address yourself.
+   If a page is already open, it reloads itself after a restart (no extra tab).
+To quit: Ctrl+C in the terminal.
+
+The server can only be reached from this PC (127.0.0.1), not from the network.
+Different port:  PORT=8001 ./start.sh
+
+WHAT THE PC NEEDS
+-----------------
+- Debian 12 / Ubuntu 22.04 or newer (or another Linux with glibc 2.35 or newer), x86-64.
+- For the GPU computation methods: a graphics card with an OpenCL driver (NVIDIA: proprietary driver;
+  AMD: ROCm; Intel: intel-opencl-icd) and the OpenCL loader (package ocl-icd-libopencl1, usually installed with the
+  driver). Check: clinfo -l. Without it, these entries are greyed out. In WSL, the GPU entries are always greyed out.
+- For the SIMD computation methods and assembler: a CPU with AVX2 (almost all since about 2015). Otherwise greyed out.
+The page detects the CPU and graphics card at start-up and shows everything under "System".
+
+NOTES
+-----
+- On the very first start, numba compiles its computation routine once (a few seconds).
+- Measurement results are saved in the benchmarks/ folder (CSV for spreadsheets and JSON; the column names/keys are German).
+- The package can be rebuilt on a Linux PC with ./export_full.sh (see README.md).
+- Language: switch DE | EN at the top of the page (default = English; the choice is remembered).
+  Server start language:  KM_LANG=de ./start.sh
+- Description and project report are included in both languages: README.md / README.de.md,
+  Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).
+- Technical terms (numba, SIMD, CCX, OpenCL ...) are explained in README.md in the "Glossary" section, with links.
+- A red notice at the top of the page means: the server rejected requests from outside (e.g. a foreign
+  website). Nothing was executed; details in logs/security.log. License texts: LICENSE, THIRD_PARTY_NOTICES.md, licenses/.

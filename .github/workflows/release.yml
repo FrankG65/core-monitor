@@ -1,5 +1,5 @@
-# Builds the "Full" package (embedded Python, all programs precompiled) on a Windows runner, tests it and
-# attaches it to a GitHub release. Started by hand: Actions -> Release -> Run workflow -> enter the version tag.
+# Builds the "Full" packages (own Python, all programs precompiled) on a Windows and an Ubuntu 22.04 runner, tests
+# them and attaches them to a GitHub release. Started by hand: Actions -> Release -> Run workflow -> enter the version tag.
 # If the release does not exist yet, it is created (tag on the current main) with docs/release_notes.md as text.
 name: Release
 
@@ -55,3 +55,55 @@ jobs:
           } else {
             gh release create $env:TAG $zip.FullName $sha --target main --title "Core Monitor $($env:TAG.TrimStart('v'))" --notes-file docs/release_notes.md
           }
+
+  # Linux: built on Ubuntu 22.04 (glibc 2.35) - the oldest supported system, so the programs also run on Debian 12,
+  # Ubuntu 22.04 and everything newer. Runs after the Windows job, which creates the release if necessary.
+  linux-full-package:
+    needs: full-package
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: System packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential nasm ocl-icd-opencl-dev pocl-opencl-icd
+
+      - name: Python packages (for testing)
+        run: python -m pip install --disable-pip-version-check -r requirements.txt numba
+
+      - name: Build and test from source
+        env:
+          KM_OPENCL_CPU: "1"
+        run: |
+          dotnet build csharp/MandelBench -c Release -o csharp/bin --nologo -v q
+          (cd rust/mandelbench && cargo build --release --quiet)
+          sh native/build.sh
+          python tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm,gpu,gpu_float
+
+      - name: Build the Linux Full package
+        run: sh tools/export.sh Full
+
+      - name: Test the package (its own Python, unpacked in a fresh folder)
+        env:
+          KM_OPENCL_CPU: "1"
+        run: |
+          mkdir -p "$RUNNER_TEMP/pkg"
+          tar xzf export/CoreMonitor_Full_Linux_*.tar.gz -C "$RUNNER_TEMP/pkg"
+          cd "$RUNNER_TEMP"/pkg/CoreMonitor_Full_Linux_*
+          python/bin/python3 tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm,gpu,gpu_float
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" export/CoreMonitor_Full_Linux_*.tar.gz export/CoreMonitor_Full_Linux_*.tar.gz.sha256 --clobber

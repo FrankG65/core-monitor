@@ -4,7 +4,8 @@ Everything else in the program is based on these values (worker counts, benchmar
 computation methods, heatmap, texts). That way it also runs on other computers.
 
 For testing, a different computer can be simulated, e.g.:
-    set KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0
+    set KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0          (Windows)
+    KM_SIMULATE=logical=8,physical=8,avx2=0,fma=0,gpu=0 ./start.sh     (Linux)
 """
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ import psutil
 from worker_util import retry_access_denied
 
 ROOT = Path(__file__).parent
-GPU_PROBE = ROOT / "native" / "bin" / "mandel_gpu.exe"
+GPU_PROBE = ROOT / "native" / "bin" / ("mandel_gpu.exe" if os.name == "nt" else "mandel_gpu")
 
 
 def _simulation() -> dict:
@@ -73,7 +74,55 @@ def _topology_windows() -> dict:
             "l3_kb": l3_size // 1024}
 
 
+def _cpu_list(text: str) -> list[int]:
+    """Linux CPU list such as "0-3,8,10-11" -> [0, 1, 2, 3, 8, 10, 11]."""
+    out = []
+    for part in text.strip().split(","):
+        if "-" in part:
+            a, b = part.split("-")
+            out.extend(range(int(a), int(b) + 1))
+        elif part:
+            out.append(int(part))
+    return out
+
+
+def _topology_linux() -> dict:
+    """/sys/devices/system/cpu: cores (thread_siblings_list), L3 groups (cache/index*/shared_cpu_list), NUMA nodes."""
+    base = Path("/sys/devices/system/cpu")
+    online = _cpu_list((base / "online").read_text())
+    cores, l3, l3_kb = set(), set(), 0
+    for cpu in online:
+        d = base / f"cpu{cpu}"
+        cores.add(tuple(_cpu_list((d / "topology" / "thread_siblings_list").read_text())))
+        for idx in sorted((d / "cache").glob("index*")):
+            try:
+                if (idx / "level").read_text().strip() == "3":
+                    l3.add(tuple(_cpu_list((idx / "shared_cpu_list").read_text())))
+                    size = (idx / "size").read_text().strip().upper()   # e.g. "16384K"
+                    l3_kb = int(size[:-1]) * (1024 if size.endswith("M") else 1) if size[-1] in "KM" else int(size) // 1024
+            except (OSError, ValueError):
+                pass
+    numa = len(list(Path("/sys/devices/system/node").glob("node[0-9]*")))
+    return {"cores": sorted(list(c) for c in cores), "l3": sorted(list(g) for g in l3), "numa_nodes": max(numa, 1),
+            "processor_groups": 1, "l3_kb": l3_kb}
+
+
 def _cpu_name_vendor() -> tuple[str, str]:
+    if os.name != "nt":   # Linux: /proc/cpuinfo ("model name", "vendor_id")
+        name = vendor = ""
+        try:
+            for line in Path("/proc/cpuinfo").read_text(errors="replace").splitlines():
+                key, _, val = line.partition(":")
+                key = key.strip()
+                if key == "model name" and not name:
+                    name = val.strip()
+                elif key == "vendor_id" and not vendor:
+                    vendor = val.strip()
+                if name and vendor:
+                    break
+        except OSError:
+            pass
+        return name or platform.processor(), vendor
     try:
         import winreg
         key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
@@ -102,13 +151,15 @@ def detect_cpu() -> dict:
     physical = psutil.cpu_count(logical=False) or logical
     name, vendor = _cpu_name_vendor()
     topo, source = None, "assumed"   # source ID; app.py turns it into text (topology_source_text)
-    if os.name == "nt":
-        try:
-            t = _topology_windows()
-            if sorted(lp for c in t["cores"] for lp in c) == list(range(logical)):
-                topo, source = t, "GetLogicalProcessorInformationEx"
-        except Exception:
-            pass
+    try:
+        if os.name == "nt":
+            t, src = _topology_windows(), "GetLogicalProcessorInformationEx"
+        else:
+            t, src = _topology_linux(), "/sys/devices/system/cpu"
+        if sorted(lp for c in t["cores"] for lp in c) == list(range(logical)):
+            topo, source = t, src
+    except Exception:
+        pass
     if "logical" in SIM or "physical" in SIM:   # test: different computer
         logical = int(SIM.get("logical", logical))
         physical = int(SIM.get("physical", min(physical, logical)))
@@ -131,7 +182,8 @@ def detect_cpu() -> dict:
 
 
 def detect_gpus() -> list[dict]:
-    """All graphics cards via DXGI (helper program mandel_gpu.exe --probe): name, memory, feature level, double."""
+    """All graphics cards via the helper program (mandel_gpu --probe): name, memory, compute, double.
+    Windows: DXGI/Direct3D 11. Linux: OpenCL (every installed OpenCL driver, e.g. NVIDIA, AMD ROCm, Intel, POCL)."""
     if SIM.get("gpu") == "0":
         return []
     if not GPU_PROBE.exists():

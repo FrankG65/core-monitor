@@ -38,24 +38,46 @@ except Exception:  # numba missing or not matching the Python version
 
 CSHARP_PROJECT = Path(__file__).parent / "csharp" / "MandelBench"
 CSHARP_DLL = Path(__file__).parent / "csharp" / "bin" / "MandelBench.dll"
-CSHARP_EXE = Path(__file__).parent / "csharp" / "bin" / "MandelBench.exe"  # self-contained (package "Full"), no .NET needed
+EXE = ".exe" if os.name == "nt" else ""   # Linux programs have no file extension
+# self-contained (package "Full"), no .NET needed
+CSHARP_EXE = Path(__file__).parent / "csharp" / "bin" / ("MandelBench" + EXE)
 DOTNET = shutil.which("dotnet")
 HAVE_DOTNET = (DOTNET is not None and CSHARP_PROJECT.exists()) or CSHARP_EXE.exists()
 RUST_PROJECT = Path(__file__).parent / "rust" / "mandelbench"
-RUST_EXE = RUST_PROJECT / "target" / "release" / ("mandelbench.exe" if os.name == "nt" else "mandelbench")
-_cargo_home = Path.home() / ".cargo" / "bin" / ("cargo.exe" if os.name == "nt" else "cargo")
+RUST_EXE = RUST_PROJECT / "target" / "release" / ("mandelbench" + EXE)
+_cargo_home = Path.home() / ".cargo" / "bin" / ("cargo" + EXE)
 CARGO = shutil.which("cargo") or (str(_cargo_home) if _cargo_home.exists() else None)  # rustup may not update PATH
 HAVE_RUST = RUST_PROJECT.exists() and (CARGO is not None or RUST_EXE.exists())
 NATIVE_DIR = Path(__file__).parent / "native"
-NATIVE_EXE = {"c": NATIVE_DIR / "bin" / "mandel_c.exe", "cpp": NATIVE_DIR / "bin" / "mandel_cpp.exe",
-              "asm": NATIVE_DIR / "bin" / "mandel_asm.exe", "gpu": NATIVE_DIR / "bin" / "mandel_gpu.exe"}
-_vswhere = Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
-HAVE_NATIVE = os.name == "nt" and NATIVE_DIR.exists() and (_vswhere.exists() or any(e.exists() for e in NATIVE_EXE.values()))
+# package "Full": embedded Python next to the program (Windows: python\python.exe, Linux: python/bin/python3)
+FULL_PACKAGE = (Path(__file__).parent / "python" / ("python.exe" if os.name == "nt" else "bin/python3")).exists()
+NATIVE_EXE = {b: NATIVE_DIR / "bin" / f"mandel_{b}{EXE}" for b in ("c", "cpp", "asm", "gpu")}
+if os.name == "nt":   # Windows: Visual Studio (MSVC, MASM, Direct3D 11)
+    _vswhere = Path(os.environ.get("ProgramFiles(x86)", "")) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+    HAVE_NATIVE_TOOLS = _vswhere.exists()
+else:                 # Linux: GCC (C, C++), NASM (assembler), OpenCL headers (GPU) - see native/build.sh
+    HAVE_NATIVE_TOOLS = shutil.which(os.environ.get("CC", "gcc")) is not None
+HAVE_NATIVE = NATIVE_DIR.exists() and (HAVE_NATIVE_TOOLS or any(e.exists() for e in NATIVE_EXE.values()))
+
+
+def _native_tool(base: str) -> bool:
+    """Could this program be built here? (On Linux the assembler needs NASM, the GPU the OpenCL headers.)"""
+    if not HAVE_NATIVE_TOOLS:
+        return False
+    if os.name == "nt":
+        return True
+    if base == "asm":
+        return shutil.which("nasm") is not None
+    if base == "gpu":
+        return Path("/usr/include/CL/cl.h").exists()
+    return base == "c" or shutil.which(os.environ.get("CXX", "g++")) is not None
+
+
 # per program: if only one .exe is missing (e.g. quarantine), the others remain usable
 _NATIVE_ENGINES = {"c": "c", "c_simd": "c", "cpp": "cpp", "cpp_simd": "cpp", "asm": "asm", "gpu": "gpu", "gpu_float": "gpu"}
 ENGINES = ((["numba"] if HAVE_NUMBA else []) + ["numpy"] + (["csharp", "csharp_simd"] if HAVE_DOTNET else [])
            + (["rust", "rust_simd"] if HAVE_RUST else [])
-           + [e for e, b in _NATIVE_ENGINES.items() if HAVE_NATIVE and (_vswhere.exists() or NATIVE_EXE[b].exists())])
+           + [e for e, b in _NATIVE_ENGINES.items() if HAVE_NATIVE and (NATIVE_EXE[b].exists() or _native_tool(b))])
 EXTERNAL = ("csharp", "rust", "c", "cpp", "asm", "gpu")  # computation methods as a separate program (threads or GPU)
 ALL_ENGINES = ["numba", "numpy", "csharp", "csharp_simd", "rust", "rust_simd",
                "c", "c_simd", "cpp", "cpp_simd", "asm", "gpu", "gpu_float"]
@@ -66,10 +88,20 @@ def missing_reason(engine: str) -> str | None:
     if engine in ENGINES:
         return None
     base = engine_base(engine)
-    if base != "numba" and (Path(__file__).parent / "python" / "python.exe").exists():
+    if base != "numba" and FULL_PACKAGE:
         # package "Full" ships all programs – if one is missing, an antivirus has usually removed it
         return L("Programm fehlt – vermutlich von einem Virenscanner in Quarantäne verschoben (unbegründet, siehe INSTALLATION.de.txt)",
                  "Program missing – probably moved to quarantine by an antivirus (unfounded, see INSTALLATION.txt)")
+    if os.name != "nt":   # Linux: the apt packages to install (see INSTALLATION_LINUX.txt)
+        return {"numba": L("numba nicht installiert (pip install numba)", "numba not installed (pip install numba)"),
+                "csharp": L(".NET SDK nicht installiert (siehe INSTALLATION_LINUX.de.txt)",
+                            ".NET SDK not installed (see INSTALLATION_LINUX.txt)"),
+                "rust": L("Rust nicht installiert (siehe INSTALLATION_LINUX.de.txt)", "Rust not installed (see INSTALLATION_LINUX.txt)"),
+                "asm": L("NASM nicht installiert (sudo apt install nasm)", "NASM not installed (sudo apt install nasm)"),
+                "gpu": L("OpenCL-Entwicklerdateien fehlen (sudo apt install ocl-icd-opencl-dev)",
+                         "OpenCL development files missing (sudo apt install ocl-icd-opencl-dev)")}.get(
+            base, L("GCC nicht installiert (sudo apt install build-essential)",
+                    "GCC not installed (sudo apt install build-essential)"))
     return {"numba": L("numba nicht installiert (pip install numba)", "numba not installed (pip install numba)"),
             "csharp": L(".NET SDK nicht installiert (siehe INSTALLATION.de.txt)", ".NET SDK not installed (see INSTALLATION.txt)"),
             "rust": L("Rust nicht installiert (siehe INSTALLATION.de.txt)", "Rust not installed (see INSTALLATION.txt)")}.get(
@@ -123,18 +155,21 @@ def _build_or_use_shipped(name: str, binaries: list[Path], have_tools: bool, bui
 
 
 def ensure_native_built():
-    """Builds C, C++, assembler and GPU with Visual Studio (native/build.bat), if needed."""
-    sources = [p for p in NATIVE_DIR.rglob("*") if p.suffix in (".c", ".cpp", ".h", ".asm", ".hlsl", ".bat")]
-    if not any(_stale(e, sources) for e in NATIVE_EXE.values()):
+    """Builds C, C++, assembler and GPU, if needed: Windows with Visual Studio (native/build.bat),
+    Linux with GCC/NASM/OpenCL (native/build.sh)."""
+    sources = [p for p in NATIVE_DIR.rglob("*") if p.suffix in (".c", ".cpp", ".h", ".asm", ".hlsl", ".cl", ".bat", ".sh")]
+    wanted = [e for b, e in NATIVE_EXE.items() if os.name == "nt" or _native_tool(b)]   # Linux: only what can be built
+    if not any(_stale(e, sources) for e in wanted):
         return
+    cmd = ["cmd.exe", "/c", "call", "build.bat"] if os.name == "nt" else ["sh", "build.sh"]
 
     def build():
-        r = subprocess.run(["cmd.exe", "/c", "call", "build.bat"], cwd=NATIVE_DIR, capture_output=True, text=True,
+        r = subprocess.run(cmd, cwd=NATIVE_DIR, capture_output=True, text=True,
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if r.returncode != 0:
             raise RuntimeError(L("C/C++/Assembler-Build fehlgeschlagen: ", "C/C++/assembler build failed: ")
                                + (r.stdout + r.stderr)[-500:])
-    _build_or_use_shipped("C/C++/Assembler/GPU", list(NATIVE_EXE.values()), _vswhere.exists(), build)
+    _build_or_use_shipped("C/C++/Assembler/GPU", wanted or list(NATIVE_EXE.values()), HAVE_NATIVE_TOOLS, build)
 
 
 ORDER_IDS = ("zeilen", "teuer")   # ID "teuer" stays (old benchmark files)
@@ -252,7 +287,9 @@ def _colorize(nu: np.ndarray) -> np.ndarray:
 
 def _current_cpu() -> int:
     try:
-        return ctypes.windll.kernel32.GetCurrentProcessorNumber()
+        if os.name == "nt":
+            return ctypes.windll.kernel32.GetCurrentProcessorNumber()
+        return os.sched_getcpu()
     except Exception:
         return -1
 
@@ -337,7 +374,7 @@ def ensure_rust_built():
 
 def ensure_csharp_built():
     """Builds the C# program (Release) if it is missing or the source is newer."""
-    if CSHARP_EXE.exists():   # self-contained .exe (package "Full") needs neither .NET nor building
+    if CSHARP_EXE.exists() and (FULL_PACKAGE or DOTNET is None):   # self-contained program (package "Full")
         return
     sources = list(CSHARP_PROJECT.glob("*.cs")) + list(CSHARP_PROJECT.glob("*.csproj"))
     if not _stale(CSHARP_DLL, sources):
@@ -353,12 +390,13 @@ def ensure_csharp_built():
 
 
 PLACEMENT_IDS = ("windows", "verteilt", "kompakt")
+OS_NAME = "Windows" if os.name == "nt" else "Linux"
 
 
 def placement_labels() -> dict:
     """Placements: ID -> label in the current language."""
     return {
-        "windows": L("Windows entscheidet", "Windows decides"),
+        "windows": L(f"{OS_NAME} entscheidet", f"{OS_NAME} decides"),   # ID "windows" stays (old benchmark files)
         "verteilt": L("1 Thread je Kern zuerst (über alle CCX verteilt)",
                       "1 thread per core first (spread across all CCX)"),
         "kompakt": L("kompakt: beide Threads eines Kerns, CCX für CCX",

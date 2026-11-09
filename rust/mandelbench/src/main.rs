@@ -68,7 +68,31 @@ mod native {
         unsafe { SetPriorityClass(GetCurrentProcess(), 0x4000) };  // like the Python workers and C#
     }
 }
-#[cfg(not(windows))]
+// Linux: functions of the C library (glibc), declared here directly - no external crates needed
+#[cfg(target_os = "linux")]
+mod native {
+    extern "C" {
+        fn sched_setaffinity(pid: i32, size: usize, mask: *const u64) -> i32;
+        fn sched_getcpu() -> i32;
+        fn setpriority(which: i32, who: u32, prio: i32) -> i32;
+    }
+    pub fn pin(lp: usize) {
+        if lp < 1024 {
+            let mut mask = [0u64; 16]; // cpu_set_t: 1024 bits
+            mask[lp / 64] = 1u64 << (lp % 64);
+            unsafe { sched_setaffinity(0, std::mem::size_of_val(&mask), mask.as_ptr()) }; // 0 = this thread
+        }
+    }
+    pub fn cpu() -> u32 {
+        let c = unsafe { sched_getcpu() };
+        if c < 0 { 0 } else { c as u32 }
+    }
+    pub fn below_normal() {
+        // nice 5 (PRIO_PROCESS = 0, 0 = this process); called before the worker threads start, which inherit it
+        unsafe { setpriority(0, 0, 5) };
+    }
+}
+#[cfg(not(any(windows, target_os = "linux")))]
 mod native {
     pub fn pin(_: usize) {}
     pub fn cpu() -> u32 { 0 }

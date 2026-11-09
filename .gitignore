@@ -42,3 +42,6 @@ desktop.ini
 
 # Security log of rejected requests (security.py)
 logs/
+
+# Python environment of start.sh (Linux)
+.venv/

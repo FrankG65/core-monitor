@@ -1,10 +1,7 @@
 // Mandelbrot in C++ with std::thread and std::atomic as a shared tile queue.
 // Same compute core as the C variant (mandel_core.h); only the threading and I/O side is C++.
 // Protocol as in csharp/MandelBench: READY, per tile "B i worker cpu ms len" + RGB bytes, at the end "R {json}".
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <io.h>
-#include <fcntl.h>
+#include "../platform.h"   // pinning, processor number, priority, binary stdout (Windows/Linux)
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -15,9 +12,9 @@
 #include "../mandel_core.h"
 
 int main() {
-    _setmode(_fileno(stdout), _O_BINARY);   // write image data unchanged
+    km_binary_stdout();   // write image data unchanged
     Config cfg = read_config();
-    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+    km_below_normal();
     build_palette();
     Kernel4 kernel = cfg.simd && cpu_has_avx2() ? kernel4_intrin : nullptr;   // without AVX2: scalar
 
@@ -43,7 +40,7 @@ int main() {
 
     auto worker = [&](int index) {
         if (cfg.n_affinity > 0)
-            SetThreadAffinityMask(GetCurrentThread(), DWORD_PTR(1) << cfg.affinity[index % cfg.n_affinity]);
+            km_pin_thread(cfg.affinity[index % cfg.n_affinity]);
         int64_t inside = 0;
         double sum = 0, cpu = 0;
         for (int k; (k = next.fetch_add(1, std::memory_order_relaxed)) < (int)order.size();) {
@@ -56,7 +53,7 @@ int main() {
             cpu += sec;
             if (cfg.emit_tiles) {
                 std::lock_guard<std::mutex> g(out);
-                std::fprintf(stdout, "B %d %d %lu %.1f %zu\n", t.index, index, GetCurrentProcessorNumber(), sec * 1000, rgb.size());
+                std::fprintf(stdout, "B %d %d %lu %.1f %zu\n", t.index, index, km_current_cpu(), sec * 1000, rgb.size());
                 std::fwrite(rgb.data(), 1, rgb.size(), stdout);
                 std::fflush(stdout);
             }

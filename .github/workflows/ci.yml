@@ -1,6 +1,9 @@
-# Automatic test: builds all computation methods from source on a Windows runner and runs tools/selftest.py
-# (every method renders, CPU methods bit-identical to numba, scaling test, Pi vs mpmath, privacy check).
-# The runner has no graphics card: the GPU methods must show up greyed out with a reason.
+# Automatic test: builds all computation methods from source on a Windows and an Ubuntu runner and runs
+# tools/selftest.py (every method renders, CPU methods bit-identical to numba, scaling test, Pi vs mpmath,
+# privacy check).
+# Windows: the runner has no graphics card - the GPU methods must show up greyed out with a reason.
+# Linux: POCL (an OpenCL driver that runs on the CPU) stands in for a graphics card, so the OpenCL GPU program is
+# built AND tested; GPU double must even be bit-identical to numba there.
 name: CI
 
 on:
@@ -18,6 +21,7 @@ concurrency:
 
 jobs:
   test:
+    name: Windows
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -49,3 +53,47 @@ jobs:
 
       - name: Self-test
         run: python tools\selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm
+
+  linux:
+    name: Linux (Ubuntu)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      # 3.10 = the oldest supported version (Ubuntu 22.04); Debian 12 has 3.11, Ubuntu 24.04 has 3.12
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: System packages (the same as in INSTALLATION_LINUX.txt, plus POCL as OpenCL driver)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential nasm ocl-icd-opencl-dev pocl-opencl-icd
+
+      - name: Python packages
+        run: python -m pip install --disable-pip-version-check -r requirements.txt numba
+
+      - name: Build C#
+        run: dotnet build csharp/MandelBench -c Release -o csharp/bin --nologo -v q
+
+      - name: Build Rust
+        working-directory: rust/mandelbench
+        run: cargo build --release --quiet
+
+      - name: Build C, C++, assembler (NASM) and GPU (OpenCL)
+        run: sh native/build.sh
+
+      - name: Shell scripts (syntax)
+        run: for f in start.sh native/build.sh export_lite.sh export_full.sh; do sh -n "$f"; done
+
+      - name: Self-test
+        env:
+          KM_OPENCL_CPU: "1"   # count POCL (CPU) as a usable "graphics card" for the test
+        run: python tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm,gpu,gpu_float

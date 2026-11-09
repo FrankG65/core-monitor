@@ -1,0 +1,75 @@
+CORE MONITOR – "Lite" package for Linux (Debian / Ubuntu)
+=========================================================
+
+This package contains only the source code (no ready-made programs, no Python). Everything is built fresh from
+source on the target PC. You only need what you want to use:
+
+  What                          Needed for                                    Without it ...
+  ----------------------------  --------------------------------------------  ---------------------------------------
+  1. Python 3.10+ with venv     EVERYTHING (server, page, Python methods)     nothing runs
+  2. Internet (once)            Python packages via pip                       start.sh stops with a hint
+  3. GCC (build-essential)      C, C++ (and assembler, GPU)                   these are greyed out
+  4. NASM                       computation method "Assembler"                greyed out
+  5. .NET SDK 10                computation methods "C#" and "C# SIMD"        these two are greyed out
+  6. Rust (cargo)               computation methods "Rust" and "Rust SIMD"    these two are greyed out
+  7. OpenCL: headers + driver   GPU computation methods                       greyed out
+
+Tested on Ubuntu 24.04 (and Ubuntu 22.04 / Debian 12 as the oldest supported systems), x86-64 (64-bit PC).
+The SIMD computation methods and assembler need a CPU with AVX2 (almost all since about 2015); otherwise greyed out.
+The page detects the CPU and graphics card at start-up and shows under "System" what is available and, if not, why.
+
+STEP BY STEP (in a terminal)
+----------------------------
+1) Python and compilers (Python required, the rest recommended) - one command:
+     sudo apt update
+     sudo apt install python3 python3-venv build-essential nasm ocl-icd-opencl-dev clinfo
+   start.sh creates its own Python environment (folder .venv next to start.sh) and installs the packages there
+   (requirements.txt: fastapi, uvicorn, psutil, numpy, gmpy2, mpmath; plus numba, optional).
+   The system's Python stays unchanged.
+
+2) Rust (optional, for Rust)
+     sudo apt install cargo
+   or the newest version via https://rustup.rs
+   Check:  cargo --version
+
+3) .NET SDK 10 (optional, for C#)
+   - Ubuntu 24.04 and newer:   sudo apt install dotnet-sdk-10.0
+   - Ubuntu 22.04, Debian 12:  if apt does not find the package, follow Microsoft's guide:
+     https://learn.microsoft.com/dotnet/core/install/linux
+   Check:  dotnet --version          (10.x)
+
+4) Graphics card (optional, for GPU): the GPU program uses OpenCL. It needs the OpenCL files from step 1
+   (ocl-icd-opencl-dev) and an OpenCL driver for the card:
+   - NVIDIA: the proprietary driver (e.g. sudo ubuntu-drivers install) - it includes OpenCL.
+   - AMD:    ROCm (https://rocm.docs.amd.com); alternatively  sudo apt install mesa-opencl-icd  (often without double).
+   - Intel:  sudo apt install intel-opencl-icd
+   Check:  clinfo -l     (must list the graphics card)
+   Without a driver, the two GPU entries are greyed out; everything else works.
+
+STARTING
+--------
+1. Extract the archive, e.g.:   tar xzf CoreMonitor_Lite_Linux_<date>.tar.gz
+2. In the extracted folder:     ./start.sh
+   On the first start, the Python packages are installed and - as far as the tools are available - C#, Rust, C, C++,
+   assembler and GPU are compiled (1-3 minutes).
+3. The browser opens http://127.0.0.1:8000 - if not, enter this address yourself.
+   The server can only be reached from this PC (127.0.0.1), not from the network.
+To quit: Ctrl+C in the terminal. Different port:  PORT=8001 ./start.sh
+
+WSL (Linux on Windows)
+----------------------
+Core Monitor also runs in WSL (Ubuntu). Open http://127.0.0.1:8000 in the Windows browser.
+WSL has no OpenCL access to the graphics card - the GPU entries are greyed out there.
+
+PROBLEMS?
+---------
+- "Could not create the Python environment": sudo apt install python3-venv
+- A computation method is greyed out: expand "System" at the top of the page - the reason is shown there.
+- No internet: on a Linux PC with internet, build the "Full" package (./export_full.sh) and use that instead.
+- Language: switch DE | EN at the top of the page (default = English; the choice is remembered).
+  Server start language:  KM_LANG=de ./start.sh
+- Description and project report are included in both languages: README.md / README.de.md,
+  Project_Report_Core_Monitor.pdf (English) / Projektbericht_Parallelisierung.pdf (German).
+- Technical terms (numba, SIMD, CCX, OpenCL ...) are explained in README.md in the "Glossary" section, with links.
+- A red notice at the top of the page means: the server rejected requests from outside (e.g. a foreign
+  website). Nothing was executed; details in logs/security.log. License: LICENSE, THIRD_PARTY_NOTICES.md.
