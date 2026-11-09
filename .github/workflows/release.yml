@@ -82,25 +82,23 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r requirements.txt numba pypdfium2
 
       - name: Build and test from source
-        env:
-          KM_OPENCL_CPU: "1"
+        # No KM_OPENCL_CPU here: POCL 1.8 on Ubuntu 22.04 (LLVM 11) fails on some newer
+        # runner CPUs. The GPU program is still built and shipped; the CI job tests it on Ubuntu 24.04.
         run: |
           dotnet build csharp/MandelBench -c Release -o csharp/bin --nologo -v q
           (cd rust/mandelbench && cargo build --release --quiet)
           sh native/build.sh
-          python tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm,gpu,gpu_float
+          python tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm
 
       - name: Build the Linux Full package
         run: sh tools/export.sh Full
 
       - name: Test the package (its own Python, unpacked in a fresh folder)
-        env:
-          KM_OPENCL_CPU: "1"
         run: |
           mkdir -p "$RUNNER_TEMP/pkg"
           tar xzf export/CoreMonitor_Full_Linux_*.tar.gz -C "$RUNNER_TEMP/pkg"
           cd "$RUNNER_TEMP"/pkg/CoreMonitor_Full_Linux_*
-          python/bin/python3 tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm,gpu,gpu_float
+          python/bin/python3 tools/selftest.py --require numba,numpy,csharp,csharp_simd,rust,rust_simd,c,c_simd,cpp,cpp_simd,asm
 
       - name: Attach to the release
         env:

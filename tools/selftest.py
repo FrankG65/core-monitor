@@ -122,6 +122,8 @@ def image(srv: Server, engine: str):
     """Render a small image; returns (status, pixel hash)."""
     srv.post("/api/mandel/start", {"width": 400, "height": 640, "maxiter": 1000, "engine": engine})
     s = srv.wait("/api/mandel/status")
+    if "job" not in s:   # failed before the first tile (e.g. external program crashed): report, don't crash
+        return s, ""
     tiles, since = [], 0
     while True:
         r = srv.get(f"/api/mandel/tiles?job={s['job']}&since={since}")
