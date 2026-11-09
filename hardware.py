@@ -146,6 +146,15 @@ def _isa() -> dict:
             "fma": bool(f.get("FMA3")), "avx512f": bool(f.get("AVX512F"))}
 
 
+def cpu_freq():
+    """psutil.cpu_freq(), or None if the system does not report it. WSL 1, for example, lacks
+    /sys/.../cpufreq/scaling_min_freq, and psutil then raises FileNotFoundError."""
+    try:
+        return psutil.cpu_freq()
+    except (OSError, NotImplementedError, ValueError):
+        return None
+
+
 def detect_cpu() -> dict:
     logical = psutil.cpu_count(logical=True) or 1
     physical = psutil.cpu_count(logical=False) or logical
@@ -172,7 +181,7 @@ def detect_cpu() -> dict:
     for k in ("avx", "avx2", "fma", "avx512f"):
         if k in SIM:
             isa[k] = SIM[k] == "1"
-    freq = psutil.cpu_freq()
+    freq = cpu_freq()
     return {"name": name, "vendor": vendor, "logical": logical, "physical": physical, "smt": logical > physical,
             "threads_per_core": max(len(c) for c in topo["cores"]), "cores": topo["cores"], "l3": topo["l3"],
             "l3_kb": topo["l3_kb"], "numa_nodes": topo["numa_nodes"], "processor_groups": topo["processor_groups"],

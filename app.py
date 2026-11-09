@@ -228,7 +228,7 @@ async def sampler():
 
 async def _sample_once():
     per_core = psutil.cpu_percent(percpu=True)[:LOGICAL]  # (on a simulated computer only that many threads)
-    freq = psutil.cpu_freq()
+    freq = hardware.cpu_freq()
     mem = psutil.virtual_memory()
     msg = {
         "boot": BOOT_ID,
