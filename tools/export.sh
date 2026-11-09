@@ -95,8 +95,11 @@ fi
 
 step "Privacy check (no information about this PC and its user in the package)"
 set -- "$ROOT" "$WORK"
-[ -n "$HOME" ] && [ "$HOME" != / ] && [ "$HOME" != /root ] && set -- "$@" "$HOME"
-[ -n "$USER" ] && [ "$USER" != root ] && set -- "$@" "/home/$USER/" "$USER@"
+# On GitHub Actions the user is the generic runner account (same name in third-party build paths)
+if [ "$GITHUB_ACTIONS" != true ]; then
+    [ -n "$HOME" ] && [ "$HOME" != / ] && [ "$HOME" != /root ] && set -- "$@" "$HOME"
+    [ -n "$USER" ] && [ "$USER" != root ] && set -- "$@" "/home/$USER/" "$USER@"
+fi
 HOSTNAME_=$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null || true)
 [ ${#HOSTNAME_} -ge 6 ] && set -- "$@" "$HOSTNAME_"
 for ip in $(hostname -I 2>/dev/null); do

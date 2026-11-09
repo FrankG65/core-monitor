@@ -102,8 +102,12 @@ Get-ChildItem $work -Recurse -Directory -Filter "__pycache__" | Remove-Item -Rec
 if (Test-Path "$work\python\Lib\site-packages\bin") { Remove-Item "$work\python\Lib\site-packages\bin" -Recurse -Force }
 
 Step "Privacy check (no information about this PC and its user in the package)"
-$patterns = @($env:USERPROFILE, "\Users\$env:USERNAME\", "/Users/$env:USERNAME/", $root, ($root -replace '\\', '/'),
-              $env:OneDrive, "\\$env:COMPUTERNAME\", "$env:COMPUTERNAME.", "$env:USERNAME@")
+$patterns = @($root, ($root -replace '\\', '/'), "\\$env:COMPUTERNAME\", "$env:COMPUTERNAME.")
+# On GitHub Actions the user is the generic runner account; third-party wheels built on GitHub runners
+# contain the same name in their build paths, so the user patterns only make sense on a real PC.
+if ($env:GITHUB_ACTIONS -ne "true") {
+    $patterns += @($env:USERPROFILE, "\Users\$env:USERNAME\", "/Users/$env:USERNAME/", $env:OneDrive, "$env:USERNAME@")
+}
 $patterns += (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
               Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" }).IPAddress
 foreach ($mac in (Get-NetAdapter -ErrorAction SilentlyContinue).MacAddress) { if ($mac) { $patterns += $mac; $patterns += ($mac -replace "-", ":") } }

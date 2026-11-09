@@ -29,7 +29,7 @@ jobs:
           dotnet-version: "10.0.x"
 
       - name: Python packages (for building and testing)
-        run: python -m pip install --disable-pip-version-check -r requirements.txt numba
+        run: python -m pip install --disable-pip-version-check -r requirements.txt numba pypdfium2
 
       - name: Build and test from source
         shell: cmd
@@ -79,7 +79,7 @@ jobs:
           sudo apt-get install -y -q build-essential nasm ocl-icd-opencl-dev pocl-opencl-icd
 
       - name: Python packages (for testing)
-        run: python -m pip install --disable-pip-version-check -r requirements.txt numba
+        run: python -m pip install --disable-pip-version-check -r requirements.txt numba pypdfium2
 
       - name: Build and test from source
         env:

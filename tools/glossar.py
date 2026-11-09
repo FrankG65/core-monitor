@@ -3,7 +3,7 @@
 Each term exists in German (list G) and English (dict EN). After changing the list:
     python tools/glossar.py                          regenerate README files and web page
     python tools\\glossar.py check                   fetch all links and report broken ones
-    python tools\\glossar.py report <file.html> de|en   replace chapter 10 in the HTML source of a report
+    python tools\\glossar.py report <file.html> de|en   replace chapter 11 in the HTML source of a report
 """
 import html, sys, urllib.request
 from pathlib import Path
@@ -333,7 +333,7 @@ def markdown(lang: str) -> str:
 
 def html_section(lang: str) -> str:
     t = TEXT[lang]
-    h = [f'<h2 class="pb">10. {t["title"]}</h2>', f"<p>{t['intro']}</p>", '<table class="gloss">']
+    h = [f'<h2 class="pb">11. {t["title"]}</h2>', f"<p>{t['intro']}</p>", '<table class="gloss">']
     for name, desc, url in items(lang):
         link = f'<br><a href="{html.escape(url)}">{html.escape(url)}</a>' if url else ""
         h.append(f"  <tr><td>{html.escape(name)}</td><td>{html.escape(desc)}{link}</td></tr>")
@@ -355,10 +355,10 @@ def readme():
 
 
 def report(path: str, lang: str):
-    """Replace chapter 10 (glossary) in the HTML source of the project report."""
+    """Replace chapter 11 (glossary) in the HTML source of the project report."""
     p = Path(path)
     r = p.read_text(encoding="utf-8")
-    m = r.find('<h2 class="pb">10. ')
+    m = r.find('<h2 class="pb">11. ')
     if m >= 0:
         r = r[:m] + "</body>" + r.split("</body>", 1)[1]
     css = ("  table.gloss td:first-child { width: 33%; font-weight: 600; }\n"
